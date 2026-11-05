@@ -1,0 +1,54 @@
+{
+  "title": "Three-hour cardio recording from effort to rest",
+  "description": "A three-hour recording where heart rate gradually eases from around 128 to 66 bpm. Follow the changing pulse alongside ECG, breathing, and motion; the raw signals contain short recording gaps.",
+  "from_timestamp_ms": 1790323200000,
+  "to_timestamp_ms": 1790334600000,
+  "timestamp_unit": "Unix milliseconds, UTC",
+  "dataTypes": [
+    {
+      "signal": "ecg",
+      "unit": "V",
+      "samples": 2691770
+    },
+    {
+      "signal": "pulse",
+      "unit": "bpm",
+      "samples": 2456
+    },
+    {
+      "signal": "rr",
+      "unit": "ms",
+      "samples": 16684
+    },
+    {
+      "signal": "respiration",
+      "unit": "Ohm",
+      "samples": 538245
+    },
+    {
+      "signal": "acceleration",
+      "unit": "g",
+      "samples": 610518
+    },
+    {
+      "signal": "body-position",
+      "unit": "position code and label",
+      "samples": 206
+    }
+  ],
+  "license": "MIT",
+  "raw_signal_quality": {
+    "ecg": {
+      "observed_time_coverage": 0.943657,
+      "max_gap_seconds": 59.599
+    },
+    "respiration": {
+      "observed_time_coverage": 0.943105,
+      "max_gap_seconds": 59.614
+    },
+    "acceleration": {
+      "observed_time_coverage": 0.944447,
+      "max_gap_seconds": 59.613
+    }
+  }
+}

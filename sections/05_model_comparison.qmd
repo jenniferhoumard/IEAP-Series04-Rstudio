@@ -1,0 +1,20 @@
+
+## Draw conclusions
+
+<!--
+Compare your numerical findings with your initial predictions.
+
+- Were your hypotheses supported by the data?
+- Which mathematical model best describes heart rate recovery?
+- Does the same model adequately describe both recordings?
+- Are there different recovery phases?
+- What are the limitations of your analysis?
+
+Support your conclusions with graphs, fitted parameters
+and statistical evidence.
+
+Final objective:
+Explain what mathematical model you would choose to describe
+heart rate recovery after exercise and justify your choice using
+both scientific literature and experimental evidence.
+-->

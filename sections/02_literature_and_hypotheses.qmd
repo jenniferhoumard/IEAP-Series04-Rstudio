@@ -1,0 +1,22 @@
+## Formulate predictions from scientific literature (without AI)
+
+<!--
+Before analysing the data, investigate the scientific literature
+on heart rate recovery (HRR) after exercise.
+
+Use PubMed, Google Scholar or other scientific databases to identify:
+
+- What mathematical models have been proposed to describe heart rate recovery?
+- What physiological mechanisms explain the decrease in heart rate after exercise?
+- What are the expected characteristics of the recovery curve?
+- Does the literature suggest that one mathematical model is sufficient
+  to describe the entire recovery period?
+
+Important:
+Your predictions must be based on your own reading and interpretation
+of scientific publications. Do not use AI at first, but you can check
+if you agree with AI, after AFTER exploring PubMed or Google Scholar.
+
+Provide at least two scientific references and formulate your hypotheses
+about the mathematical model you expect to find.
+-->

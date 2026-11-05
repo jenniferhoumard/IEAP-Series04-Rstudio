@@ -1,0 +1,76 @@
+---
+title: "Linear and non-linear regressions"
+subtitle: "IEAP — Series 04 group assignment"
+author:
+  - Jennifer Houmard
+  - Sarah Durand
+  - Alexis Lagarde
+date: today
+date-format: "D MMMM YYYY"
+bibliography: references.bib
+csl: styles/apa.csl
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-overflow: wrap
+    embed-resources: true
+  pdf:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    pdf-engine: xelatex
+    geometry: margin=2.2cm
+    fontsize: 11pt
+    include-in-header:
+      text: |
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,breakanywhere,commandchars=\\\{\}}
+        \fvset{breaklines=true,breakanywhere=true}
+        \usepackage{xurl}
+        \emergencystretch=3em
+  gfm:
+    toc: true
+    number-sections: true
+execute:
+  echo: true
+  warning: true
+  message: false
+  error: false
+---
+
+[GitHub repository](https://github.com/jenniferhoumard/IEAP-Series04-Rstudio)
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+library(lmtest)
+
+```
+
+# How does random noise affect linear regression? 
+
+{{< include sections/01_random_noise.qmd >}}
+
+# Finding a mathematical model for heart rate recovery after exercise 
+
+{{< include sections/02_literature_and_hypotheses.qmd >}}
+
+{{< include sections/03_recovery_3h10m.qmd >}}
+
+{{< include sections/04_recovery_7m30s.qmd >}}
+
+{{< include sections/05_model_comparison.qmd >}}
+
+# Team workflow using Git
+
+{{< include sections/06_git_workflow.qmd >}}
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+

@@ -1,0 +1,37 @@
+---
+title: "Critical Analysis"
+subtitle: "IEAP — Series 04"
+author:
+  - Jennifer Houmard
+  - Sarah Durand
+  - Alexis Lagarde
+date: today
+date-format: "D MMMM YYYY"
+format:
+  pdf:
+    toc: false
+    number-sections: false
+    pdf-engine: xelatex
+    fontsize: 10pt
+    geometry: margin=2cm
+---
+
+[GitHub repository](https://github.com/jenniferhoumard/IEAP-Series04-Rstudio)
+
+## Challenges and choices
+
+<!--
+Reflect on the challenges encountered during the work
+and the choices you made to overcome them.
+-->
+
+
+## Lessons learned
+
+<!--
+Focus on what you learned from the process,
+rather than simply describing what you did.
+
+Be concise, clear and analytical.
+Use the one-page limit to prioritise your most important insights.
+-->

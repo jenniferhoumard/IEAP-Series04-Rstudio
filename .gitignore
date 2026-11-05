@@ -1,0 +1,25 @@
+
+# RStudio local settings
+.Rproj.user/
+
+# R session history and saved workspace
+.Rhistory
+.RData
+.Ruserdata
+
+# macOS and Windows system files
+.DS_Store
+Thumbs.db
+
+# Quarto temporary files and execution caches
+.quarto/
+*_cache/
+
+# LaTeX temporary files
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz

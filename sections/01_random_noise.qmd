@@ -1,0 +1,54 @@
+## Formulate your expectations (without AI)
+
+<!--
+Before running any simulations, write down what you expect to happen
+when the level of random noise increases.
+
+In particular, consider:
+
+- What will happen to
+  - the estimated slope and intercept?
+  - the quality of the predictions?
+  - the amount of explained variance?
+- Will the estimated linear relationships remain identical?
+
+Explain your reasoning.
+-->
+
+
+## Implement and investigate
+
+<!--
+Generate three synthetic datasets with:
+
+- The same underlying linear relationship.
+- The same range of x values.
+- Three different levels of random noise.
+
+Fit a linear regression model to each dataset.
+
+Compare the three fitted models using appropriate numerical indicators
+and visualizations.
+-->
+
+
+## Draw conclusions
+
+<!--
+Compare your numerical findings with your initial expectations.
+
+- Were your expectations confirmed?
+- What differences did you observe between the three models?
+- What can you conclude about the impact of random noise on regression
+  estimates and predictive performance?
+
+Support your conclusions with evidence from your numerical experiment.
+-->
+
+
+## Propose a better numerical experiment
+
+<!--
+To best reproduce the theoretical expectations about the effect of
+random noise, how could you improve the experimental protocol?
+-->

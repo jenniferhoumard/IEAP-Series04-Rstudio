@@ -1,0 +1,15 @@
+
+<!--
+Include an analysis of your team’s workflow strategy using Git.
+
+You must use branches to work on different questions in parallel,
+and merge them into the master document when they are ready.
+
+You have to choose what to include in your .gitignore
+and do it BEFORE working together.
+
+The repository should show:
+
+- A clear git history, with meaningful commit messages.
+- A principled use of branches.
+-->
