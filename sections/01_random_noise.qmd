@@ -177,7 +177,7 @@ add_regression_to_data <- function(data, model, ci = 0.95) {
 }
 ```
 
-### Visualize Synthetic Datasets
+### Fit a Linear Regression and Plot 
 
 ```{r}
 # 5. Fit linear regression models to each dataset
@@ -212,7 +212,6 @@ y_high_ci <- add_regression_to_data(y_high, lm_high)
 ```
 
 
-
 ```{r}
 # 8.Function to plot the datasets with its regression and confidence interval
 
@@ -223,7 +222,7 @@ plot_regression <- function(data, title) {
                 fill = "lightblue", alpha = 0.3) + # 95% confidence interval
     geom_point() + # Observed data points
     geom_line(aes(y = fit, color = "Estimated regression")) + # Fitted regression
-    geom_line(aes(y = 2 * x + 5, color = "True relationship")) + # True line
+    geom_line(aes(y = 2 * x + 5, color = "True relationship")) + # True regression
     scale_color_manual(values = c(
       "Estimated regression" = "blue",
       "True relationship" = "red"
@@ -237,10 +236,89 @@ plot_regression(y_low_ci, "Low Noise")
 plot_regression(y_medium_ci, "Medium Noise")
 plot_regression(y_high_ci, "High Noise")
 ```
+### Diagnostic Plots
+
+```{r}
+# Diagnostic plots for low noise
+plot(lm_low)
+```
+
+```{r}
+# Diagnostic plots for medium noise
+plot(lm_medium)
+```
+
+
+```{r}
+# Diagnostic plots for medium noise
+plot(lm_high)
+```
+
+After fitting the three linear regression models, we checked the residuals to see whether the assumptions of linear regression were satisfied. 
+
+The **Shapiro-Wilk test** checks whether the residuals are normally distributed. In linear regression, the original data do not need to be normally distribute, but the errors are assumed to be normally distributed for the usual statistical tests and confidence intervals to be exact. This is because these tests use mathematical distributions to calculate p-values and confidence intervals. When the errors are normally distributed, we know how the estimated regression coefficients are expected to vary, allowing us to calculate their uncertainty. If the errors are not normally distributed, these calculations may be less accurate, especially with small samples. However, normality is not necessary to calculate the regression line itself.
+
+The **Breusch-Pagan test** checks whether the residual variance is constant (homoscedasticity). This means checking whether the errors have around the same spread across the fitted/predicted values. If the variance is not constant, the usual standard errors and confidence intervals may be unreliable. 
+
+We use a standard significance level of 0.05 to interpret both tests.
+
+| Test | p-value ≥ 0.05 | p-value < 0.05 |
+|---|---|---|
+| Shapiro–Wilk | No significant evidence against normality | Evidence that residuals are not normally distributed |
+| Breusch–Pagan | No significant evidence against constant variance | Evidence that residual variance is not constant |
+
+A p-value above 0.05 does not prove that an assumption is satisfied.
+
+```{r}
+# 10. Check the residuals of the three regression models
+
+# a) Shapiro-Wilk test: check if residuals are normally distributed
+
+shapiro.test(residuals(lm_low)) # low noise
+shapiro.test(residuals(lm_medium)) # medium noise
+shapiro.test(residuals(lm_high)) # high noise
+
+# b) Breusch-Pagan test: check if residual variance is constant
+
+bptest(lm_low) # low noise
+bptest(lm_medium) # medium noise
+bptest(lm_high) # high noise
+```
+
+
+### Comparison of Regression Models
+
+```{r}
+# 10.Create a table to compare the three regression models
+
+comparison <- data.frame(
+  Noise = c("Low", "Medium", "High"),
+
+  Intercept = c(coef(lm_low)[1], 
+                coef(lm_medium)[1],
+                coef(lm_high)[1]),
+
+  Slope = c(coef(lm_low)[2],
+            coef(lm_medium)[2],
+            coef(lm_high)[2]),
+
+  R_squared = c(summary(lm_low)$r.squared,
+                summary(lm_medium)$r.squared,
+                summary(lm_high)$r.squared),
+
+  Residual_SE = c(summary(lm_low)$sigma,
+                  summary(lm_medium)$sigma,
+                  summary(lm_high)$sigma)
+)
+
+# Display the comparison as a table in the PDF
+knitr::kable(comparison, digits = 3)
+```
 
 
 
-## Draw conclusions
+## Draw Conclusiosn
+
 
 
 
