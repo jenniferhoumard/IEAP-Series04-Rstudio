@@ -408,3 +408,31 @@ knitr::kable(r7_sens_tab, digits = 1,
   fitted at all**: there is no second exponential phase to estimate. Whenever it
   does converge, its slow component degenerates into a linear drift
   ($\tau_2$ of several thousand seconds).
+  
+#### Summary of findings for this recording
+
+- The recording covers **recovery only**: exercise ended shortly before it
+  started. The recovery is **active** until ~330 s (participant moving), then
+  **passive**.
+- The **linear model** is clearly rejected: worst fit, systematic curvature in
+  the residuals, and no physiological meaning.
+- The **mono-exponential model** is the best compromise. With only 3
+  parameters it explains most of the variance and gives an interpretable time
+  constant and a plateau (~131–133 bpm) that matches the HR kept up by ongoing
+  movement. Its best estimate is the one obtained on a window of constant
+  activity: **$\tau \approx 49$ s** (95 % CI ≈ 44–53 s, 0–330 s). On the whole
+  recording $\tau \approx 63$ s, which is biased upwards by the late drop.
+- The **mono-exponential + linear drift** has the lowest AIC/BIC on the whole
+  recording, but its drift term is purely empirical: a straight line cannot
+  continue forever. It is useful to show that the bi-exponential's "slow
+  phase" is only a trend, not as a physiological model.
+- The **bi-exponential model is not justified** here. Its slightly better
+  statistics come from a slow component that is mathematically a straight line
+  and physiologically meaningless ($\tau_2$ > 2 h). It cannot be fitted when the
+  activity is constant. A 7.5-min recording is too short to identify a true slow
+  recovery phase, which would need tens of minutes of data.
+- The **remaining structure** in the residuals (late drop, mid-recording wave,
+  autocorrelation) comes from **changes in physical activity and breathing**,
+  not from the decay law itself. Any HRR model applied to this recording should
+  account for the activity state (for example by fitting active and passive
+  phases separately).
