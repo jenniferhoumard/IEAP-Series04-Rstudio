@@ -126,3 +126,63 @@ not the true HR drop since the end of exercise. The time constant $\tau$ is not
 affected, though: shifting time by $\delta$ in
 $a\,e^{-(t+\delta)/\tau}$ only multiplies the amplitude by $e^{-\delta/\tau}$.
 Only $\tau$ can be compared with the literature.
+#### Fitting the models
+
+We fit the three required models to the beat-to-beat HR:
+
+- **Linear:** $HR(t) = \beta_0 + \beta_1 t$
+- **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$
+- **Bi-exponential:** $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$
+
+Non-linear models are fitted by least squares with `nls()`. The bi-exponential
+is sensitive to starting values, so we try several and keep the best converged
+fit. We use the `port` algorithm with bounds ($a_i \ge 0$, $\tau_i \ge 1$ s).
+
+```{r}
+#| label: r7-fit-functions
+
+# Fit a bi-exponential from several starting points and keep the best one
+r7_fit_biexp <- function(d) {
+  starts <- list(
+    list(hr_inf = 125, a1 = 25, tau1 = 40, a2 = 5,  tau2 = 150),
+    list(hr_inf = 110, a1 = 25, tau1 = 50, a2 = 25, tau2 = 1000),
+    list(hr_inf = 120, a1 = 20, tau1 = 30, a2 = 10, tau2 = 400)
+  )
+  fits <- map(starts, \(s) tryCatch(
+    nls(hr ~ hr_inf + a1 * exp(-t / tau1) + a2 * exp(-t / tau2),
+        data = d, start = s, algorithm = "port",
+        lower = c(0, 0, 1, 0, 1), upper = c(200, 200, 1e4, 200, 1e5),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  fits <- compact(fits)
+  if (length(fits) == 0) return(NULL)
+  fits[[which.min(map_dbl(fits, deviance))]]
+}
+
+r7_fit_models <- function(d) {
+  list(
+    linear = lm(hr ~ t, data = d),
+    mono = nls(hr ~ hr_inf + a * exp(-t / tau), data = d,
+               start = list(hr_inf = 130, a = 25, tau = 40)),
+    bi = r7_fit_biexp(d)
+  )
+}
+
+# Indicators of goodness of fit and residual structure
+r7_indicators <- function(models, d) {
+  imap(compact(models), \(m, name) {
+    e <- resid(m)
+    tibble(model = name,
+           k = length(coef(m)),
+           RMSE = sqrt(mean(e^2)),
+           R2 = 1 - sum(e^2) / sum((d$hr - mean(d$hr))^2),
+           AIC = AIC(m),
+           BIC = BIC(m),
+           DW = sum(diff(e)^2) / sum(e^2),        # Durbin-Watson
+           acf_lag1 = acf(e, plot = FALSE)$acf[2],
+           LjungBox_p = Box.test(e, lag = 10, type = "Ljung-Box")$p.value)
+  }) |>
+    list_rbind() |>
+    mutate(dAIC = AIC - min(AIC), .after = AIC)
+}
+```
