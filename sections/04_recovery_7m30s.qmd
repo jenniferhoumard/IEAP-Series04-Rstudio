@@ -186,3 +186,13 @@ r7_indicators <- function(models, d) {
     mutate(dAIC = AIC - min(AIC), .after = AIC)
 }
 ```
+
+```{r}
+#| label: r7-fit-full
+
+r7_models <- r7_fit_models(r7_rr)
+r7_ind <- r7_indicators(r7_models, r7_rr)
+
+knitr::kable(r7_ind, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
+             caption = "Model comparison on the whole recording (0–450 s, beat-to-beat HR)")
+```
