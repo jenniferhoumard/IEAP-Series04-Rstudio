@@ -237,3 +237,7 @@ imap(compact(r7_models), r7_param_table) |>
 - **Linear:** HR falls by `r round(-coef(r7_models$linear)["t"] * 60, 1)`
   bpm/min on average. This model has no physiological meaning: it would predict
   HR to keep falling indefinitely, which is impossible.
+  - **Mono-exponential:** $\tau =$ `r round(coef(r7_models$mono)["tau"], 1)` s and
+  $HR_\infty =$ `r round(coef(r7_models$mono)["hr_inf"], 1)` bpm. All
+  parameters are precise and physiologically interpretable: HR tends towards
+  about 131 bpm, the level kept up by the active recovery.
