@@ -196,3 +196,21 @@ r7_ind <- r7_indicators(r7_models, r7_rr)
 knitr::kable(r7_ind, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
              caption = "Model comparison on the whole recording (0–450 s, beat-to-beat HR)")
 ```
+
+```{r}
+#| label: fig-r7-fits
+#| fig-cap: "Linear, mono-exponential and bi-exponential fits to the beat-to-beat heart rate (whole recording)."
+
+r7_grid <- tibble(t = seq(0, max(r7_rr$t), by = 1))
+r7_pred <- imap(compact(r7_models), \(m, name)
+                mutate(r7_grid, model = name, hr = predict(m, newdata = r7_grid))) |>
+  list_rbind()
+
+ggplot(r7_rr, aes(t, hr)) +
+  geom_point(colour = "grey70", size = 0.6) +
+  geom_line(data = r7_pred, aes(colour = model), linewidth = 0.9) +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  labs(x = "Time from start of recording (s)", y = "Heart rate (bpm)",
+       colour = "Model") +
+  theme_minimal()
+```
