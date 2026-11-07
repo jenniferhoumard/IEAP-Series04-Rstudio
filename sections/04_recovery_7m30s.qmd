@@ -254,3 +254,11 @@ imap(compact(r7_models), r7_param_table) |>
   bpm/min. $HR_\infty$, $a_2$ and $\tau_2$ cannot be estimated separately (the
   model is not identifiable here), which is also why their standard errors are
   so large.
+
+The data therefore do not contain a second exponential phase within 450 s. What
+the bi-exponential captures is a slow downward **drift**, caused mainly by the
+end of movement at 330 s. To check this, we fit a more parsimonious model with
+the same shape, a **mono-exponential plus a linear drift** (4 parameters instead
+of 5):
+
+$$HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$$
