@@ -3,21 +3,8 @@
 
 ### Test your predictions using the dataset
 
-<!--
-- Identify the exercise and recovery periods.
-- Extract and visualise heart rate as a function of time.
-- Identify the period corresponding to post-exercise recovery.
-- Fit appropriate mathematical models to the recovery data.
-- Compare the fitted models using appropriate statistical indicators
-  and residual analysis.
-
-You will have to test:
-
-- A linear model.
-- A mono-exponential decay model.
-- A bi-exponential decay model, if justified by the data.
-
-Do not select a model based on visual appearance alone.
-Consider goodness of fit, residual structure, model complexity
-and physiological interpretability.
--->
+The recording comes from an Aidlab chest strap (MIT licence). It lasts 450 s and
+contains ECG, beat-to-beat RR intervals, a 5-s pulse signal, respiration,
+3-axis acceleration and body position. All timestamps are Unix milliseconds
+(UTC). We express time in seconds from the start of the recording
+(`from_timestamp_ms` in `dataset.json`).
