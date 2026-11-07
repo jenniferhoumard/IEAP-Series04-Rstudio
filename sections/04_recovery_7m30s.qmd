@@ -46,3 +46,24 @@ tibble(signal = c("RR intervals", "pulse", "acceleration (10-s windows)"),
        t_end_s = c(max(r7_rr$t), max(r7_pulse$t), max(r7_acc$t))) |>
   knitr::kable(digits = 1, caption = "Signals used in the analysis")
 ```
+
+Before fitting anything, we check the RR intervals for artefacts (missed or
+extra beats). A common rule is to reject any interval that differs by more than
+20 % from the previous one.
+
+```{r}
+#| label: r7-artefacts
+
+r7_rr <- r7_rr |>
+  mutate(rel_change = abs(rr / lag(rr) - 1),
+         artefact = !is.na(rel_change) & rel_change > 0.20)
+
+r7_rr |>
+  summarise(n_beats = n(),
+            n_artefacts = sum(artefact),
+            rr_min_ms = min(rr), rr_max_ms = max(rr),
+            hr_min_bpm = min(hr), hr_max_bpm = max(hr)) |>
+  knitr::kable(digits = 1, caption = "RR interval quality check")
+
+r7_rr <- filter(r7_rr, !artefact)
+```
