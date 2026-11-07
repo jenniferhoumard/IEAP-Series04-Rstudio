@@ -337,3 +337,20 @@ r7_res |>
   labs(x = "Lag (beats)", y = "ACF") +
   theme_minimal()
 ```
+
+- **Linear:** residuals show a clear U-shaped pattern: positive at the start,
+  negative in the middle, positive again. The model misses the curvature of the
+  fast phase. This is a systematic error, not noise.
+- **Mono-exponential:** the fast phase is captured well, but the residuals
+  become negative after 330 s, when the participant stops moving and HR drops
+  below the predicted plateau. There is also a negative dip around 100 s, which
+  matches the short pause in movement.
+- **Bi-exponential / mono + drift:** the end-of-recording trend is partly
+  absorbed, but slow waves remain (for example around 240–290 s, a period of
+  movement).
+- **For all models**, residuals stay strongly autocorrelated (lag-1 ACF ≈ 0.7,
+  Durbin-Watson ≪ 2, Ljung-Box p ≈ 0). Part of this comes from the physiology:
+  beat-to-beat HR oscillates with breathing (respiratory sinus arrhythmia) and
+  with changes in movement. No smooth decay curve can capture this. As a
+  result, the AIC, standard errors and F-test computed on ~1 000 beats overstate
+  the evidence. The differences between models should be read as indicative.
