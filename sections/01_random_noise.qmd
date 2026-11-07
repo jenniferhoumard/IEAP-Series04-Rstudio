@@ -70,7 +70,7 @@ As in the pre-series, we combined additive and multiplicative noise to simulate 
 
 $$\boxed{y_{\text{obs}} = (2x + 5)\eta + \varepsilon}$$
 
-![Comparison of additive and multiplicative noise. Generated with AI.](figures/noise.png){width=70%}
+![Comparison of additive and multiplicative noise. Generated with AI.](sections/figures/noise.png){width=85%}
 
 
 **Additive noise** has a mean of 0 because the errors are centered around 0. This means that positive and negative errors tend to cancel out on average when enough observations are collected. If the errors had a positive or negative mean, the observed values would be systematically overestimated or underestimated compared to the true values. We want the observed values to remain equal to the true values on average because we are keeping the underlying linear relationship the same. Only the data points should become more scattered around the true linear relationship. Adding 0 to the true value does not change the overall average trend, which is what we want. 
@@ -85,7 +85,7 @@ The goal is to increase the amount of random variation without changing the true
 
 ### Generating Synthetic Datasets
 
-![Experimental design: Three increasing noise levels. Generated with AI.](figures/experiment.png){width=70%}
+![Experimental design: Three increasing noise levels. Generated with AI.](sections/figures/experiment.png){width=70%}
 
 We generated three datasets from the same true relationship, (y = 2x + 5), allowing us to compare how increasing noise affects the regression results. Each contains 120 observations with the same values of (x), ranging from 0 to 10.
 
@@ -243,7 +243,7 @@ plot_regression(y_high_ci, "High Noise")
 
 All three models produce nearly identical diagnostic patterns, despite having different noise levels. This is because we used the same random errors for all three datasets. Consequently, the residuals follow exactly the same pattern, but their magnitudes are multiplied by 1, 2 and 4.
 
-![Residual: Difference between observed and predicted values. Generated with AI.](figures/residual.png){width="70%"}
+![Residual: Difference between observed and predicted values. Generated with AI.](sections/figures/residual.png){width="70%"}
 
 A residual is the difference between an observed value and the value predicted by the regression model.
 
@@ -401,4 +401,3 @@ Finally, we could extend the experiment to other relationships, such as quadrati
 We could also compare these models with more flexible machine learning methods. Unlike models where we choose a specific equation, some machine learning methods can learn complex patterns directly from the data. This could be useful when the underlying relationship is unknown.
 
 However, more flexible models are not necessarily better because they may also learn random errors rather than the true relationship, which is called overfitting. By comparing the models at different noise levels and evaluating their predictions on separate test data, we could investigate whether more flexible models improve prediction accuracy or become more sensitive to noise.
-
