@@ -376,5 +376,15 @@ These results suggest that increasing noise reduces regression fit and predictio
 
 Finally, the diagnostic tests showed that increasing the magnitude of the noise did not change the residual distribution or its relative pattern in our experiment. Therefore, more noise does not automatically mean that the assumptions of linear regression are violated.
 
+## Propose a better numerical experiment
 
+We could also test additive and multiplicative noise separately to better understand how each type affects regression estimates and model assumptions. However, combining both types of noise is also important because real-world data can contain several sources of error at the same time.
+
+Another improvement would be to evaluate the models using a separate test dataset. This would allow us to measure how increasing noise affects the accuracy of predictions on new observations, rather than only evaluating how well the models fit the original data.
+
+Finally, we could extend the experiment to other relationships, such as quadratic, polynomial or exponential relationships, because real-world data do not always follow a straight line. We could then investigate whether increasing noise has similar effects on different types of regression models.
+
+We could also compare these models with more flexible machine learning methods. Unlike models where we choose a specific equation, some machine learning methods can learn complex patterns directly from the data. This could be useful when the underlying relationship is unknown.
+
+However, more flexible models are not necessarily better because they may also learn random errors rather than the true relationship, which is called overfitting. By comparing the models at different noise levels and evaluating their predictions on separate test data, we could investigate whether more flexible models improve prediction accuracy or become more sensitive to noise.
 
