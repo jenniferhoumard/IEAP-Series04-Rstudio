@@ -262,3 +262,18 @@ the same shape, a **mono-exponential plus a linear drift** (4 parameters instead
 of 5):
 
 $$HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$$
+
+
+```{r}
+#| label: r7-drift
+
+r7_drift <- nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = r7_rr,
+                start = list(hr0 = 130, a = 25, tau = 40, b = 0))
+
+r7_param_table(r7_drift, "mono + drift") |>
+  knitr::kable(digits = 3, caption = "Mono-exponential + linear drift")
+
+r7_indicators(c(compact(r7_models), list(`mono + drift` = r7_drift)), r7_rr) |>
+  knitr::kable(digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
+               caption = "Comparison including the mono-exponential + drift model")
+```
