@@ -214,3 +214,22 @@ ggplot(r7_rr, aes(t, hr)) +
        colour = "Model") +
   theme_minimal()
 ```
+
+#### Fitted parameters
+
+```{r}
+#| label: r7-params
+
+r7_param_table <- function(m, name) {
+  s <- summary(m)$coefficients
+  tibble(model = name, parameter = rownames(s),
+         estimate = s[, 1], SE = s[, 2],
+         CI_low = s[, 1] - 1.96 * s[, 2],
+         CI_high = s[, 1] + 1.96 * s[, 2])
+}
+
+imap(compact(r7_models), r7_param_table) |>
+  list_rbind() |>
+  knitr::kable(digits = 3,
+               caption = "Fitted parameters (Wald 95 % CI, whole recording)")
+```
