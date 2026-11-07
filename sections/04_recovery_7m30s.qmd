@@ -70,3 +70,28 @@ r7_rr <- filter(r7_rr, !artefact)
 
 No interval was rejected, so the RR series is clean. All RR values stay between
 368 and 520 ms (115–163 bpm), which is physiologically plausible.
+
+#### Identifying the exercise and recovery periods
+
+```{r}
+#| label: fig-r7-overview
+#| fig-cap: "7.5-min recording. Top: beat-to-beat HR from RR intervals (grey) and device pulse (black). Bottom: movement (SD of acceleration magnitude, 10-s windows). The dashed line at 330 s marks the moment the participant stops moving."
+#| fig-height: 6
+
+r7_t_still <- 330
+
+r7_p1 <- ggplot() +
+  geom_point(data = r7_rr, aes(t, hr), colour = "grey60", size = 0.6) +
+  geom_line(data = r7_pulse, aes(t, hr), linewidth = 0.7) +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  labs(x = NULL, y = "Heart rate (bpm)") +
+  theme_minimal()
+
+r7_p2 <- ggplot(r7_acc, aes(t, acc_sd)) +
+  geom_col(fill = "steelblue", width = 9) +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  labs(x = "Time from start of recording (s)", y = "Acceleration SD (g)") +
+  theme_minimal()
+
+patchwork::wrap_plots(r7_p1, r7_p2, ncol = 1, heights = c(2, 1))
+```
