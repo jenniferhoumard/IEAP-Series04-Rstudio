@@ -241,3 +241,16 @@ imap(compact(r7_models), r7_param_table) |>
   $HR_\infty =$ `r round(coef(r7_models$mono)["hr_inf"], 1)` bpm. All
   parameters are precise and physiologically interpretable: HR tends towards
   about 131 bpm, the level kept up by the active recovery.
+  - **Bi-exponential:** the fast component
+  ($\tau_1 \approx$ `r round(coef(r7_models$bi)["tau1"], 1)` s) is plausible,
+  but the slow component is **not**:
+  $\tau_2 \approx$ `r round(coef(r7_models$bi)["tau2"])` s (more than 2 hours,
+  much longer than the 7.5-min recording),
+  $a_2 \approx$ `r round(coef(r7_models$bi)["a2"])` bpm, and
+  $HR_\infty \approx$ `r round(coef(r7_models$bi)["hr_inf"])` bpm, stuck at the
+  lower bound. When $\tau_2 \gg t$, $a_2 e^{-t/\tau_2} \approx a_2 - (a_2/\tau_2)\,t$.
+  The "slow exponential" is just a **straight line** with slope
+  `r round(-coef(r7_models$bi)["a2"] / coef(r7_models$bi)["tau2"] * 60, 2)`
+  bpm/min. $HR_\infty$, $a_2$ and $\tau_2$ cannot be estimated separately (the
+  model is not identifiable here), which is also why their standard errors are
+  so large.
