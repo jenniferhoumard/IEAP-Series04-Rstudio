@@ -1,3 +1,11 @@
+
+In real-life experiments, we collect measurements and use linear regression to estimate the relationship between variables. However, we usually do not know the true relationship, and the data can contain random noise. This makes it difficult to know how accuratley the regression line represents the underlying relationship. 
+
+
+Synthetic data allows us to investigate this problem because we can define the true linear relationship ourselves and control the amount of noise added. By increasing the noise while keeping the true relationship the same, we can compare the estimated regression lines with the known equation. This helps us understand how random noise affects the accuracy and reliability of linear regression. 
+
+Although synthetic data cannot prove whether a relationship in real measurements is correct, they help us understand the limitations of regression when analyzing noisy experimental data.
+
 ## Formulate your expectations
 
 A linear regression model describes the relationship between two variables using a straight line. 
@@ -67,6 +75,93 @@ Fit a linear regression model to each dataset.
 Compare the three fitted models using appropriate numerical indicators
 and visualizations.
 -->
+
+To investigate how random noise affects linear regression, we generated three synthetic data sets using the same underlying linear relationship. The original linear relationship is defined as:
+
+$$\boxed{y_{\text{true}}=2x+5}$$
+As in the pre-series, we combined additive and multiplicative noise to simulate data: 
+
+$$\boxed{y_{\text{obs}} = 2x + 5\eta + \varepsilon}$$
+
+**Additive noise** has a mean of 0 because the errors are centered around 0. This means that positive and negative errors tend to cancel out on average when enough observations are collected. If the errors had a positive or negative mean, the observed values would be systematically overestimated or underestimated compared to the true values. We want the observed values to remain equal to the true values on average because we are keeping the underlying linear relationship the same. Only the data points should become more scattered around the true linear relationship. Adding 0 to the true value does not change the overall average trend, which is what we want. 
+
+$$\boxed{y_{\text{obs}} = y_{\text{true}} + \varepsilon}$$
+
+**Multiplicative noise** has a mean of 1 because the factors that multiply the true values are centered around 1. Multiplying the true values by 1 does not change the overall average trend, which is what we want. This means there will be no systematic overestimation or underestimation of the observed values.
+
+$$\boxed{y_{\text{obs}} = y_{\text{true}} * \eta}$$
+
+The goal is to increase the amount of random variation without changing the true underlying relationship. To do this, we maintain a mean of 1 for the multiplicative factor and 0 for the additive noise, so the observed values remain centered around the true linear relationship. However, we increase the standard deviation of the noise to create more random variation. This will generally increase the distance between the observed values and the true linear relationship.  
+
+### Generating Synthetic Datasets
+
+We generated three datasets, each containing 120 observations with the same values of (x), ranging from 0 to 10.
+
+We first generated additive and multiplicative noise using random numbers. We then used these same numbers for all three datasets, but multiplied them by 1, 2 and 4 to create low, medium and high noise levels.
+
+This means we generate random errors once. Instead of generating completely new errors for every dataset, we make those original errors twice as large for the second dataset and four times as large for the third.
+
+We used set.seed(123) to make sure we obtain the same results each time we run the code.
+
+```{r}
+# Import libraries
+library(tidyverse)
+library(lmtest)
+
+# 1. Define the true linear relationship
+
+set.seed(123) # generate random numbers everytime we run the code
+
+n <- 120 # number of observations
+
+x <- seq(0, 10, length.out = n) # 120 values from 0 to 10
+
+y_true <- 2 * x + 5 # true linear relationship without noise
+```
+
+For multiplicative noise, we want to increase the standard deviation without changing the mean of the multiplicative factor, which should stay at 1.
+
+If we generate multiplicative noise with a mean of 1 and then multiply it by 2 or 4, the mean would also increase to 2 or 4. This would change the original linear relationship, which is not what we want.
+
+Instead, we generate multiplicative errors with a mean of 0, so multiplying them by 2 or 4 increases their standard deviation without changing their mean. We then add 1 in the equation to keep the multiplicative factor centered around 1.
+
+For additive noise, we do not need to add 1 because it is already centered around 0. Multiplying the errors by 2 or 4 increases their standard deviation while keeping their mean at 0.
+
+```{r}
+# 2. Generate additive and multiplicative noise once
+
+# Additive noise
+additive_noise <- rnorm(n, mean = 0, sd = 1) 
+# Generate additive random errors centered around 0
+
+multiplicative_noise <- rnorm(n, mean = 0, sd = 0.050) 
+# Generate multiplicative random errors centered around 0
+
+```
+
+```{r}
+# Low noise level
+y_low <- data.frame( 
+  x = x, 
+  y_obs = y_true * (1 + multiplicative_noise) + additive_noise)
+
+# Medium noise: multiply both errors by 2
+y_medium <- data.frame( 
+  x = x, 
+  y_obs = y_true * (1 + 2 * multiplicative_noise) + 2 *  additive_noise)
+
+# High noise: multiply both errors by 4
+y_high <- data.frame( 
+  x = x, 
+  y_obs = y_true * (1 + 4 * multiplicative_noise) + 4 *  additive_noise)
+
+#print(y_low)
+#print(y_medium)
+#print(y_high)
+
+```
+
+
 
 
 ## Draw conclusions
