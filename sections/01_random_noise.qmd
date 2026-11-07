@@ -63,19 +63,6 @@ However, the true linear relationship used to generate the data will remain the 
 
 ## Implement and investigate
 
-<!--
-Generate three synthetic datasets with:
-
-- The same underlying linear relationship.
-- The same range of x values.
-- Three different levels of random noise.
-
-Fit a linear regression model to each dataset.
-
-Compare the three fitted models using appropriate numerical indicators
-and visualizations.
--->
-
 To investigate how random noise affects linear regression, we generated three synthetic data sets using the same underlying linear relationship. The original linear relationship is defined as:
 
 $$\boxed{y_{\text{true}}=2x+5}$$
@@ -95,13 +82,19 @@ The goal is to increase the amount of random variation without changing the true
 
 ### Generating Synthetic Datasets
 
-We generated three datasets, each containing 120 observations with the same values of (x), ranging from 0 to 10.
+We generated three datasets from the same true relationship, (y = 2x + 5), allowing us to compare how increasing noise affects the regression results. Each contains 120 observations with the same values of (x), ranging from 0 to 10.
 
 We first generated additive and multiplicative noise using random numbers. We then used these same numbers for all three datasets, but multiplied them by 1, 2 and 4 to create low, medium and high noise levels.
 
 This means we generate random errors once. Instead of generating completely new errors for every dataset, we make those original errors twice as large for the second dataset and four times as large for the third.
 
 We used set.seed(123) to make sure we obtain the same results each time we run the code.
+
+We chose to use the same random errors multiplied by 1, 2 and 4 rather than generating completely different errors for each dataset bceause this allows us to control the experiment because only the magnitude of the noise changes, while the random error pattern remains the same.
+
+If we generated different random errors for each dataset, some errors could partly cancel each other out by chance. This means that a dataset with higher noise could sometimes produce regression estimates closer to the true values than a dataset with lower noise. We would then have difficulty determining whether the differences between the models were caused by the amount of noise or simply by the particular random errors generated.
+
+By keeping the same error pattern and increasing only its magnitude, we can more clearly observe how increasing noise affects the regression results.
 
 ```{r}
 # Import libraries
@@ -289,12 +282,12 @@ bptest(lm_high) # high noise
 ### Comparison of Regression Models
 
 ```{r}
-# 10.Create a table to compare the three regression models
+# 10. Create a table to compare the three regression models
 
 comparison <- data.frame(
   Noise = c("Low", "Medium", "High"),
 
-  Intercept = c(coef(lm_low)[1], 
+  Intercept = c(coef(lm_low)[1],
                 coef(lm_medium)[1],
                 coef(lm_high)[1]),
 
@@ -308,35 +301,80 @@ comparison <- data.frame(
 
   Residual_SE = c(summary(lm_low)$sigma,
                   summary(lm_medium)$sigma,
-                  summary(lm_high)$sigma)
+                  summary(lm_high)$sigma),
+
+  # Standard error of the estimated slope
+  Slope_SE = c(summary(lm_low)$coefficients[2, 2],
+               summary(lm_medium)$coefficients[2, 2],
+               summary(lm_high)$coefficients[2, 2]),
+
+  # Shapiro-Wilk test p-values
+  Shapiro_p = c(shapiro.test(residuals(lm_low))$p.value,
+                shapiro.test(residuals(lm_medium))$p.value,
+                shapiro.test(residuals(lm_high))$p.value),
+
+  # Breusch-Pagan test p-values
+  BP_p = c(bptest(lm_low)$p.value,
+           bptest(lm_medium)$p.value,
+           bptest(lm_high)$p.value)
 )
 
 # Display the comparison as a table in the PDF
 knitr::kable(comparison, digits = 3)
 ```
 
+**1. Low Noise:**
+
+The estimated intercept is 5.139 and the slope is 1.971, both very close to the true values of 5 and 2. The R² of 0.958 indicates that the model explains approximately 95.8% of the variation in the observed data. The residual standard error of 1.219 shows that observations are relatively close to the fitted regression line.
+
+In the regression plot, the observed points are closely grouped around the true relationship. The estimated regression line almost overlaps with the true line, and the confidence interval is narrow.
+
+**2. Medium Noise:**
+
+The estimated intercept increases to 5.279, while the slope decreases to 1.943, moving slightly further from the true values. The R² decreases to 0.845, meaning the model now explains approximately 84.5% of the variation. The residual standard error increases to 2.439, approximately twice that of the low-noise model.
+
+The observed points are more scattered around the regression line, and the confidence interval becomes wider. However, the estimated regression line remains close to the true relationship.
+
+**3. High Noise:**
+
+The estimated intercept is 5.558 and the slope is 1.886, showing the largest differences from the true values. The R² decreases further to 0.563, meaning the model explains only 56.3% of the variation. The residual standard error increases to 4.877, four times that of the low-noise model.
+
+The regression plot shows much greater scatter around the line, and the confidence interval is considerably wider. Although the estimated regression line still follows the overall linear trend, its coefficients are less precise.
+
+As noise increases, the estimated coefficients move further from the true values in this experiment. At the same time, R² decreases, while the residual and slope standard errors increase.
+
+The slope remains statistically significant in all three models (p-value < 0.001). This means that even at high noise levels, there is strong evidence of a linear relationship, although the model explains less of the observed variation.
+
+**4. Diagnostic Plots:**
+
+All three models produce nearly identical diagnostic patterns, despite having different noise levels. This is because we used the same random errors for all three datasets. Consequently, the residuals follow exactly the same pattern, but their magnitudes are multiplied by 1, 2 and 4.
+
+**a) Residuals vs Fitted:** The residuals are scattered around zero without a strong curved pattern, suggesting that a linear relationship is appropriate. However, the absolute residual values increase substantially between the low-, medium- and high-noise models.
+
+**b) Normal Q-Q:** Most points follow the reference line, with some deviations at the extremes. This suggests that the residuals are approximately normally distributed.
+
+**c) Scale-Location:** The points show no strong increasing or decreasing pattern in their spread, although there are small variations. There is no clear visual evidence of strongly non-constant variance.
+
+**d) Residuals vs Leverage:** A few observations have relatively large standardized residuals, particularly observation 44, but there is no obvious evidence of highly influential observations based on the plots.
+
+**Statistical Tests:**
+
+The Shapiro–Wilk and Breusch–Pagan tests also produce identical results because multiplying all residuals by the same positive number does not change their test statistics.
+
+For the Shapiro–Wilk test, all p-values are greater than 0.05. Therefore, we do not find significant evidence that the residuals deviate from normality.
+
+For the Breusch–Pagan test, all p-values are also greater than 0.05. Therefore, we do not find significant evidence that the residual variance is non-constant.
 
 
-## Draw Conclusiosn
+## Draw Conclusion
+
+Our main expectations were confirmed. As random noise increased, the observations became more scattered, the regression models explained less variation, and the estimated coefficients became less precise.
+
+The differences between the three models support this. R² decreased from 0.958 to 0.563, while the residual standard error increased from 1.219 to 4.877. The slope and intercept also moved further from their true values. However, the slope became smaller and the intercept larger, showing that random noise does not necessarily change regression coefficients in a particular direction.
+
+These results suggest that increasing noise reduces regression fit and prediction precision. With more noise, individual observations are harder to predict accurately, and we become less certain about the estimated relationship. However, all three models still detected a statistically significant linear relationship, showing that a relationship can remain detectable even when the observations contain substantial noise.
+
+Finally, the diagnostic tests showed that increasing the magnitude of the noise did not change the residual distribution or its relative pattern in our experiment. Therefore, more noise does not automatically mean that the assumptions of linear regression are violated.
 
 
 
-
-<!--
-Compare your numerical findings with your initial expectations.
-
-- Were your expectations confirmed?
-- What differences did you observe between the three models?
-- What can you conclude about the impact of random noise on regression
-  estimates and predictive performance?
-
-Support your conclusions with evidence from your numerical experiment.
--->
-
-
-## Propose a better numerical experiment
-
-<!--
-To best reproduce the theoretical expectations about the effect of
-random noise, how could you improve the experimental protocol?
--->
