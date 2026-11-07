@@ -114,3 +114,15 @@ What we observe:
   again, to about 124–130 bpm.
 - The body position signal only contains the label `unknown`, so it does not
   help.
+  
+We therefore consider the **whole recording (0–450 s) as the post-exercise
+recovery period**. However, the activity is not constant: it changes from
+active to passive recovery at about 330 s. No decay model contains this change,
+so we also fit the models on the active part only (0–330 s) as a sensitivity
+analysis.
+
+Because $t = 0$ is not the end of exercise, the amplitude of an exponential is
+not the true HR drop since the end of exercise. The time constant $\tau$ is not
+affected, though: shifting time by $\delta$ in
+$a\,e^{-(t+\delta)/\tau}$ only multiplies the amplitude by $e^{-\delta/\tau}$.
+Only $\tau$ can be compared with the literature.
