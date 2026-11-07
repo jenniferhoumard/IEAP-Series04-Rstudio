@@ -396,3 +396,15 @@ knitr::kable(r7_sens_tab, digits = 1,
                            "AIC linear − AIC mono", "Bi-exp converged?", "τ₂ bi-exp (s)"),
              caption = "Sensitivity of the results to the data and window used")
 ```
+
+- The **mono-exponential time constant is robust to the signal**: about
+  63–65 s on the whole recording, whether we use RR, pulse or 5-s bins. It
+  **does depend on the window**. On the active window only it is shorter
+  (≈ 49 s), close to the value obtained with the drift term (≈ 44 s). On the
+  whole recording, the end-of-movement drop pulls the curve down and makes the
+  exponential look slower than it is.
+- The mono-exponential always beats the linear model by a large AIC margin.
+- When the activity is constant (0–330 s), **the bi-exponential cannot be
+  fitted at all**: there is no second exponential phase to estimate. Whenever it
+  does converge, its slow component degenerates into a linear drift
+  ($\tau_2$ of several thousand seconds).
