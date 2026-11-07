@@ -354,3 +354,45 @@ r7_res |>
   with changes in movement. No smooth decay curve can capture this. As a
   result, the AIC, standard errors and F-test computed on ~1 000 beats overstate
   the evidence. The differences between models should be read as indicative.
+  #### Sensitivity analyses
+
+We check whether the conclusions depend on our choices: (1) fitting only the
+**active-recovery window** (0–330 s, constant activity), (2) using the device's
+**pulse** signal instead of RR, and (3) averaging RR-derived HR into **5-s bins**
+to reduce beat-to-beat noise and autocorrelation.
+
+```{r}
+#| label: r7-sensitivity
+
+r7_active <- filter(r7_rr, t <= r7_t_still)
+r7_bins <- r7_rr |>
+  group_by(t = floor(t / 5) * 5 + 2.5) |>
+  summarise(hr = mean(hr), .groups = "drop")
+
+r7_sens <- list(
+  "RR, 0–450 s (main)" = r7_rr,
+  "RR, 0–330 s (active only)" = r7_active,
+  "Pulse, 0–450 s" = r7_pulse,
+  "RR 5-s bins, 0–450 s" = r7_bins
+)
+
+r7_sens_tab <- imap(r7_sens, \(d, name) {
+  ms <- r7_fit_models(d)
+  ind <- r7_indicators(ms, d)
+  tibble(dataset = name,
+         n = nrow(d),
+         tau_mono = coef(ms$mono)["tau"],
+         tau_CI = paste0("[", paste(round(coef(ms$mono)["tau"] + c(-1.96, 1.96) *
+                          summary(ms$mono)$coefficients["tau", 2], 1), collapse = "; "), "]"),
+         hr_inf_mono = coef(ms$mono)["hr_inf"],
+         dAIC_linear = ind$dAIC[ind$model == "linear"] - ind$dAIC[ind$model == "mono"],
+         bi_converged = !is.null(ms$bi),
+         tau2_bi = if (is.null(ms$bi)) NA_real_ else coef(ms$bi)["tau2"])
+}) |>
+  list_rbind()
+
+knitr::kable(r7_sens_tab, digits = 1,
+             col.names = c("Data", "n", "τ mono (s)", "95 % CI", "HR∞ mono (bpm)",
+                           "AIC linear − AIC mono", "Bi-exp converged?", "τ₂ bi-exp (s)"),
+             caption = "Sensitivity of the results to the data and window used")
+```
