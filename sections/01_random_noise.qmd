@@ -1,5 +1,5 @@
 
-In real-life experiments, we collect measurements and use linear regression to estimate the relationship between variables. However, we usually do not know the true relationship, and the data can contain random noise. This makes it difficult to know how accuratley the regression line represents the underlying relationship. 
+In real-life experiments, we collect measurements and use linear regression to estimate the relationship between variables. However, we usually do not know the true relationship, and the data can contain random noise. This makes it difficult to know how accurately the regression line represents the underlying relationship. 
 
 
 Synthetic data allows us to investigate this problem because we can define the true linear relationship ourselves and control the amount of noise added. By increasing the noise while keeping the true relationship the same, we can compare the estimated regression lines with the known equation. This helps us understand how random noise affects the accuracy and reliability of linear regression. 
@@ -14,9 +14,9 @@ $$\boxed{y = mx + b}$$
 
 where:
 
-- $m$) = the slope
+- $m$ = the slope
 
-- ($b$) is the intercept. 
+- $b$ is the intercept. 
 
 In the pre-series, we learned about two types of random noise:
 
@@ -26,7 +26,7 @@ $$\boxed{y_{\text{obs}} = mx + b + \varepsilon}$$
 
 2. **Multiplicative noise:** The dependent variable ($y$) is multiplied by random factors. This means the absolute errors can become larger when the original values of $y$ are larger. 
 
-$$\boxed{y_{\text{obs}} = (mx + b)\eta}$$)
+$$\boxed{y_{\text{obs}} = (mx + b)\eta}$$
 
 Both types of noise can also be combined, which can make simulated data more realistic when measurements contain both types of error. 
 
@@ -34,13 +34,13 @@ $$\boxed{y_{\text{obs}} = (mx + b)\eta + \varepsilon}$$
 
 Adding noise makes the observed data points more scattered around the true linear relationship.  
 
-**Estimated slope**
+**a). Estimated slope**
 
 We expect the estimated slope and intercept to change when the noise increases. The fitted line may become steeper or flatter depending on where the noisy observations are located. 
 
 However, if the noise has a mean of zero and does not depend on x, we do not expect the slope or intercept to always increase or decrease. Instead, their estimates should become less precise as noise increases. 
 
-**Quality of predictions**
+**b). Quality of predictions**
 
 We expect predictions to become less accurate as noise increases. The data points will generally be more spread out around the regression line, leading to larger differences between observed and predicted values (residuals or errors).
 
@@ -48,13 +48,13 @@ Noise can also affect the sample mean. In general, increasing the number of obse
 
 If the noise has a mean of zero, positive and negative errors tend to cancel out when enough observations are collected. Therefore, we expect that a larger sample size can help reduce the effect of random noise on our estimates.
 
-**Explained variance**
+**c). Explained variance**
 
 We expect $R^2$ to generally decrease as noise increases. This is because more of the variation in the data comes from random noise rather than the relationship between x and y. 
 
 Therefore, the regression model will explain a smaller proportion of the observed variation.
 
-**Estimated linear relationships**
+**d). Estimated linear relationships**
 
 We expect the estimated regression lines to be different as random noise increases. This is because noise makes the data points more scattered, which can change the estimated slope and intercept. As a result, the observed linear relationships will generally become less clear, and the regression model will explain less of the variation in the data.
 
@@ -68,7 +68,10 @@ To investigate how random noise affects linear regression, we generated three sy
 $$\boxed{y_{\text{true}}=2x+5}$$
 As in the pre-series, we combined additive and multiplicative noise to simulate data: 
 
-$$\boxed{y_{\text{obs}} = 2x + 5\eta + \varepsilon}$$
+$$\boxed{y_{\text{obs}} = (2x + 5)\eta + \varepsilon}$$
+
+![Comparison of additive and multiplicative noise.](figures/noise.png){width=70%}
+
 
 **Additive noise** has a mean of 0 because the errors are centered around 0. This means that positive and negative errors tend to cancel out on average when enough observations are collected. If the errors had a positive or negative mean, the observed values would be systematically overestimated or underestimated compared to the true values. We want the observed values to remain equal to the true values on average because we are keeping the underlying linear relationship the same. Only the data points should become more scattered around the true linear relationship. Adding 0 to the true value does not change the overall average trend, which is what we want. 
 
@@ -82,6 +85,8 @@ The goal is to increase the amount of random variation without changing the true
 
 ### Generating Synthetic Datasets
 
+![Experimental design: Three increasing noise levels.](figures/experiment.png){width=70%}
+
 We generated three datasets from the same true relationship, (y = 2x + 5), allowing us to compare how increasing noise affects the regression results. Each contains 120 observations with the same values of (x), ranging from 0 to 10.
 
 We first generated additive and multiplicative noise using random numbers. We then used these same numbers for all three datasets, but multiplied them by 1, 2 and 4 to create low, medium and high noise levels.
@@ -90,7 +95,7 @@ This means we generate random errors once. Instead of generating completely new 
 
 We used set.seed(123) to make sure we obtain the same results each time we run the code.
 
-We chose to use the same random errors multiplied by 1, 2 and 4 rather than generating completely different errors for each dataset bceause this allows us to control the experiment because only the magnitude of the noise changes, while the random error pattern remains the same.
+We chose to use the same random errors multiplied by 1, 2 and 4 rather than generating completely different errors for each dataset because this allows us to control the experiment because only the magnitude of the noise changes, while the random error pattern remains the same.
 
 If we generated different random errors for each dataset, some errors could partly cancel each other out by chance. This means that a dataset with higher noise could sometimes produce regression estimates closer to the true values than a dataset with lower noise. We would then have difficulty determining whether the differences between the models were caused by the amount of noise or simply by the particular random errors generated.
 
@@ -103,7 +108,7 @@ library(lmtest)
 
 # 1. Define the true linear relationship
 
-set.seed(123) # generate random numbers everytime we run the code
+set.seed(123) # reproduces the same random numbers every time the code is run
 
 n <- 120 # number of observations
 
@@ -155,8 +160,26 @@ y_high <- data.frame(
 
 ```
 
+### Fit a Linear Regression and Plot 
+
 ```{r}
-# 4. Define a function to add linear regression and confidence intervals to the datasets
+# 4. Fit linear regression models to each dataset
+
+lm_low <- lm(y_obs ~ x, data = y_low) # low noise
+lm_medium <- lm(y_obs ~ x, data = y_medium) # medium noise
+lm_high <- lm(y_obs ~ x, data = y_high) # high noise
+
+# 5. Summary statistics for each model
+
+summary(lm_low)
+summary(lm_medium)
+summary(lm_high)
+```
+
+### Define a function to add linear regression and confidence intervals to the datasets
+
+```{r}
+# 6. Define a function to add linear regression and confidence intervals to the datasets
 
 add_regression_to_data <- function(data, model, ci = 0.95) {
 
@@ -170,32 +193,17 @@ add_regression_to_data <- function(data, model, ci = 0.95) {
 }
 ```
 
-### Fit a Linear Regression and Plot 
-
-```{r}
-# 5. Fit linear regression models to each dataset
-
-lm_low <- lm(y_obs ~ x, data = y_low) # low noise
-lm_medium <- lm(y_obs ~ x, data = y_medium) # medium noise
-lm_high <- lm(y_obs ~ x, data = y_high) # high noise
-
-# 6. Summary statistics for each model
-
-summary(lm_low)
-summary(lm_medium)
-summary(lm_high)
-```
 
 ```{r}
 # 7. Apply the function to the three datasets
 
-# Low noise level
+# Low noise 
 y_low_ci <- add_regression_to_data(y_low, lm_low)
 
-# Medium noise: multiply both errors by 2
+# Medium noise
 y_medium_ci <- add_regression_to_data(y_medium, lm_medium)
 
-# High noise: multiply both errors by 4
+# High noise
 y_high_ci <- add_regression_to_data(y_high, lm_high)
 
 #print(y_low)
@@ -204,6 +212,7 @@ y_high_ci <- add_regression_to_data(y_high, lm_high)
 
 ```
 
+### Plot the datasets with their regression and confidence intervals
 
 ```{r}
 # 8.Function to plot the datasets with its regression and confidence interval
@@ -229,10 +238,18 @@ plot_regression(y_low_ci, "Low Noise")
 plot_regression(y_medium_ci, "Medium Noise")
 plot_regression(y_high_ci, "High Noise")
 ```
+
 ### Diagnostic Plots
 
+All three models produce nearly identical diagnostic patterns, despite having different noise levels. This is because we used the same random errors for all three datasets. Consequently, the residuals follow exactly the same pattern, but their magnitudes are multiplied by 1, 2 and 4.
+
+![Residual: Difference between observed and predicted values.](figures/residual.png){width="70%"}
+
+A residual is the difference between an observed value and the value predicted by the regression model.
+
+
 ```{r}
-# Diagnostic plots for low noise
+# 9. Diagnostic plots for low noise
 plot(lm_low)
 ```
 
@@ -243,13 +260,23 @@ plot(lm_medium)
 
 
 ```{r}
-# Diagnostic plots for medium noise
+# Diagnostic plots for high noise
 plot(lm_high)
 ```
 
+**a) Residuals vs Fitted:** The residuals are scattered around zero without a strong curved pattern, suggesting that a linear relationship is appropriate. However, the absolute residual values increase substantially between the low-, medium- and high-noise models.
+
+**b) Normal Q-Q:** Most points follow the reference line, with some deviations at the extremes. This suggests that the residuals are approximately normally distributed.
+
+**c) Scale-Location:** The points show no strong increasing or decreasing pattern in their spread, although there are small variations. There is no clear visual evidence of strongly non-constant variance.
+
+**d) Residuals vs Leverage:** A few observations have relatively large standardized residuals, particularly observation 44, but there is no obvious evidence of highly influential observations based on the plots.
+
+### Statistical Tests
+
 After fitting the three linear regression models, we checked the residuals to see whether the assumptions of linear regression were satisfied. 
 
-The **Shapiro-Wilk test** checks whether the residuals are normally distributed. In linear regression, the original data do not need to be normally distribute, but the errors are assumed to be normally distributed for the usual statistical tests and confidence intervals to be exact. This is because these tests use mathematical distributions to calculate p-values and confidence intervals. When the errors are normally distributed, we know how the estimated regression coefficients are expected to vary, allowing us to calculate their uncertainty. If the errors are not normally distributed, these calculations may be less accurate, especially with small samples. However, normality is not necessary to calculate the regression line itself.
+The **Shapiro-Wilk test** checks whether the residuals are normally distributed. In linear regression, the original data do not need to be normally distributed, but the errors are assumed to be normally distributed for the usual statistical tests and confidence intervals to be exact. This is because these tests use mathematical distributions to calculate p-values and confidence intervals. When the errors are normally distributed, we know how the estimated regression coefficients are expected to vary, allowing us to calculate their uncertainty. If the errors are not normally distributed, these calculations may be less accurate, especially with small samples. However, normality is not necessary to calculate the regression line itself.
 
 The **Breusch-Pagan test** checks whether the residual variance is constant (homoscedasticity). This means checking whether the errors have around the same spread across the fitted/predicted values. If the variance is not constant, the usual standard errors and confidence intervals may be unreliable. 
 
@@ -281,8 +308,30 @@ bptest(lm_high) # high noise
 
 ### Comparison of Regression Models
 
+**1. Low Noise:**
+
+The estimated intercept is 5.139 and the slope is 1.971, both very close to the true values of 5 and 2. The R² of 0.958 indicates that the model explains approximately 95.8% of the variation in the observed data. The residual standard error of 1.219 shows that observations are relatively close to the fitted regression line.
+
+In the regression plot, the observed points are closely grouped around the true relationship. The estimated regression line almost overlaps with the true line, and the confidence interval is narrow.
+
+**2. Medium Noise:**
+
+The estimated intercept increases to 5.279, while the slope decreases to 1.943, moving slightly further from the true values. The R² decreases to 0.845, meaning the model now explains approximately 84.5% of the variation. The residual standard error increases to 2.439, approximately twice that of the low-noise model.
+
+The observed points are more scattered around the regression line, and the confidence interval becomes wider. However, the estimated regression line remains close to the true relationship.
+
+**3. High Noise:**
+
+The estimated intercept is 5.558 and the slope is 1.886, showing the largest differences from the true values. The R² decreases further to 0.563, meaning the model explains only 56.3% of the variation. The residual standard error increases to 4.877, four times that of the low-noise model.
+
+The regression plot shows much greater scatter around the line, and the confidence interval is considerably wider. Although the estimated regression line still follows the overall linear trend, its coefficients are less precise.
+
+As noise increases, the estimated coefficients move further from the true values in this experiment. At the same time, R² decreases, while the residual and slope standard errors increase.
+
+The slope remains statistically significant in all three models (p-value < 0.001). This means that even at high noise levels, there is strong evidence of a linear relationship, although the model explains less of the observed variation.
+
 ```{r}
-# 10. Create a table to compare the three regression models
+# 11. Create a table to compare the three regression models
 
 comparison <- data.frame(
   Noise = c("Low", "Medium", "High"),
@@ -323,48 +372,13 @@ comparison <- data.frame(
 knitr::kable(comparison, digits = 3)
 ```
 
-**1. Low Noise:**
-
-The estimated intercept is 5.139 and the slope is 1.971, both very close to the true values of 5 and 2. The R² of 0.958 indicates that the model explains approximately 95.8% of the variation in the observed data. The residual standard error of 1.219 shows that observations are relatively close to the fitted regression line.
-
-In the regression plot, the observed points are closely grouped around the true relationship. The estimated regression line almost overlaps with the true line, and the confidence interval is narrow.
-
-**2. Medium Noise:**
-
-The estimated intercept increases to 5.279, while the slope decreases to 1.943, moving slightly further from the true values. The R² decreases to 0.845, meaning the model now explains approximately 84.5% of the variation. The residual standard error increases to 2.439, approximately twice that of the low-noise model.
-
-The observed points are more scattered around the regression line, and the confidence interval becomes wider. However, the estimated regression line remains close to the true relationship.
-
-**3. High Noise:**
-
-The estimated intercept is 5.558 and the slope is 1.886, showing the largest differences from the true values. The R² decreases further to 0.563, meaning the model explains only 56.3% of the variation. The residual standard error increases to 4.877, four times that of the low-noise model.
-
-The regression plot shows much greater scatter around the line, and the confidence interval is considerably wider. Although the estimated regression line still follows the overall linear trend, its coefficients are less precise.
-
-As noise increases, the estimated coefficients move further from the true values in this experiment. At the same time, R² decreases, while the residual and slope standard errors increase.
-
-The slope remains statistically significant in all three models (p-value < 0.001). This means that even at high noise levels, there is strong evidence of a linear relationship, although the model explains less of the observed variation.
-
-**4. Diagnostic Plots:**
-
-All three models produce nearly identical diagnostic patterns, despite having different noise levels. This is because we used the same random errors for all three datasets. Consequently, the residuals follow exactly the same pattern, but their magnitudes are multiplied by 1, 2 and 4.
-
-**a) Residuals vs Fitted:** The residuals are scattered around zero without a strong curved pattern, suggesting that a linear relationship is appropriate. However, the absolute residual values increase substantially between the low-, medium- and high-noise models.
-
-**b) Normal Q-Q:** Most points follow the reference line, with some deviations at the extremes. This suggests that the residuals are approximately normally distributed.
-
-**c) Scale-Location:** The points show no strong increasing or decreasing pattern in their spread, although there are small variations. There is no clear visual evidence of strongly non-constant variance.
-
-**d) Residuals vs Leverage:** A few observations have relatively large standardized residuals, particularly observation 44, but there is no obvious evidence of highly influential observations based on the plots.
-
-**Statistical Tests:**
+**4. Statistical Tests:**
 
 The Shapiro–Wilk and Breusch–Pagan tests also produce identical results because multiplying all residuals by the same positive number does not change their test statistics.
 
 For the Shapiro–Wilk test, all p-values are greater than 0.05. Therefore, we do not find significant evidence that the residuals deviate from normality.
 
 For the Breusch–Pagan test, all p-values are also greater than 0.05. Therefore, we do not find significant evidence that the residual variance is non-constant.
-
 
 ## Draw Conclusion
 
