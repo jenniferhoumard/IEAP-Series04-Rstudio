@@ -8,3 +8,41 @@ contains ECG, beat-to-beat RR intervals, a 5-s pulse signal, respiration,
 3-axis acceleration and body position. All timestamps are Unix milliseconds
 (UTC). We express time in seconds from the start of the recording
 (`from_timestamp_ms` in `dataset.json`).
+
+#### Data import and preparation
+
+We use the **RR intervals** as the main signal, because each interval gives one
+heart rate value (HR = 60 000 / RR). This gives about 1 000 points instead of the
+91 points of the device's 5-s `pulse` signal. We keep `pulse` as an independent
+check. The **acceleration** is used to find out whether the participant is moving.
+
+```{r}
+#| label: r7-import
+
+r7_dir <- "data/cardio-recovery-7m30s"
+r7_meta <- jsonlite::read_json(file.path(r7_dir, "dataset.json"))
+r7_t0 <- r7_meta$from_timestamp_ms
+
+# Beat-to-beat heart rate from RR intervals
+r7_rr <- read_csv(file.path(r7_dir, "rr.csv"), show_col_types = FALSE) |>
+  mutate(t = (timestamp - r7_t0) / 1000,
+         rr = value,
+         hr = 60000 / rr)
+
+# Device heart rate (one value every ~5 s)
+r7_pulse <- read_csv(file.path(r7_dir, "pulse.csv"), show_col_types = FALSE) |>
+  mutate(t = (timestamp - r7_t0) / 1000, hr = value)
+
+# Movement: SD of the acceleration magnitude in 10-s windows
+r7_acc <- read_csv(file.path(r7_dir, "acceleration.csv"), show_col_types = FALSE) |>
+  mutate(t = (timestamp - r7_t0) / 1000,
+         mag = sqrt(x^2 + y^2 + z^2)) |>
+  group_by(t = floor(t / 10) * 10 + 5) |>
+  summarise(acc_sd = sd(mag), .groups = "drop")
+
+tibble(signal = c("RR intervals", "pulse", "acceleration (10-s windows)"),
+       n = c(nrow(r7_rr), nrow(r7_pulse), nrow(r7_acc)),
+       t_start_s = c(min(r7_rr$t), min(r7_pulse$t), min(r7_acc$t)),
+       t_end_s = c(max(r7_rr$t), max(r7_pulse$t), max(r7_acc$t))) |>
+  knitr::kable(digits = 1, caption = "Signals used in the analysis")
+```
