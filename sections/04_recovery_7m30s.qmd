@@ -233,3 +233,7 @@ imap(compact(r7_models), r7_param_table) |>
   knitr::kable(digits = 3,
                caption = "Fitted parameters (Wald 95 % CI, whole recording)")
 ```
+
+- **Linear:** HR falls by `r round(-coef(r7_models$linear)["t"] * 60, 1)`
+  bpm/min on average. This model has no physiological meaning: it would predict
+  HR to keep falling indefinitely, which is impossible.
