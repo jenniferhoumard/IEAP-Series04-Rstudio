@@ -298,3 +298,25 @@ bi-exponential: its extra parameters are not interpretable, and the residuals
 are strongly autocorrelated (next section). This violates the independence
 assumption that the F-test and the standard errors rely on, so their p-values
 are far too optimistic.
+
+#### Residual analysis
+
+```{r}
+#| label: fig-r7-residuals
+#| fig-cap: "Residuals of each model versus time (whole recording). Blue line: LOESS smooth. A good model should leave residuals randomly scattered around 0."
+#| fig-height: 6
+
+r7_res <- imap(c(compact(r7_models), list(`mono + drift` = r7_drift)),
+               \(m, name) tibble(model = name, t = r7_rr$t, resid = resid(m))) |>
+  list_rbind() |>
+  mutate(model = fct_inorder(model))
+
+ggplot(r7_res, aes(t, resid)) +
+  geom_hline(yintercept = 0) +
+  geom_point(size = 0.4, colour = "grey50") +
+  geom_smooth(method = "loess", span = 0.2, se = FALSE, colour = "steelblue") +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  facet_wrap(~model, ncol = 1) +
+  labs(x = "Time from start of recording (s)", y = "Residual (bpm)") +
+  theme_minimal()
+```
