@@ -1,19 +1,56 @@
-## Formulate your expectations (without AI)
+## Formulate your expectations
 
-<!--
-Before running any simulations, write down what you expect to happen
-when the level of random noise increases.
+A linear regression model describes the relationship between two variables using a straight line. 
 
-In particular, consider:
+$$\boxed{y = mx + b}$$
 
-- What will happen to
-  - the estimated slope and intercept?
-  - the quality of the predictions?
-  - the amount of explained variance?
-- Will the estimated linear relationships remain identical?
+where:
 
-Explain your reasoning.
--->
+- $m$) = the slope
+
+- ($b$) is the intercept. 
+
+In the pre-series, we learned about two types of random noise:
+
+1. **Additive noise:** Random errors are added to the data, more specifically to the dependent variable ($y$). The size of the errors does not depend on the original values of $y$. 
+
+$$\boxed{y_{\text{obs}} = mx + b + \varepsilon}$$
+
+2. **Multiplicative noise:** The dependent variable ($y$) is multiplied by random factors. This means the absolute errors can become larger when the original values of $y$ are larger. 
+
+$$\boxed{y_{\text{obs}} = (mx + b)\eta}$$)
+
+Both types of noise can also be combined, which can make simulated data more realistic when measurements contain both types of error. 
+
+$$\boxed{y_{\text{obs}} = (mx + b)\eta + \varepsilon}$$
+
+Adding noise makes the observed data points more scattered around the true linear relationship.  
+
+**Estimated slope**
+
+We expect the estimated slope and intercept to change when the noise increases. The fitted line may become steeper or flatter depending on where the noisy observations are located. 
+
+However, if the noise has a mean of zero and does not depend on x, we do not expect the slope or intercept to always increase or decrease. Instead, their estimates should become less precise as noise increases. 
+
+**Quality of predictions**
+
+We expect predictions to become less accurate as noise increases. The data points will generally be more spread out around the regression line, leading to larger differences between observed and predicted values (residuals or errors).
+
+Noise can also affect the sample mean. In general, increasing the number of observations makes the sample mean a more precise estimate of the population mean. However, increasing random noise makes the sample mean less precise.
+
+If the noise has a mean of zero, positive and negative errors tend to cancel out when enough observations are collected. Therefore, we expect that a larger sample size can help reduce the effect of random noise on our estimates.
+
+**Explained variance**
+
+We expect $R^2$ to generally decrease as noise increases. This is because more of the variation in the data comes from random noise rather than the relationship between x and y. 
+
+Therefore, the regression model will explain a smaller proportion of the observed variation.
+
+**Estimated linear relationships**
+
+We expect the estimated regression lines to be different as random noise increases. This is because noise makes the data points more scattered, which can change the estimated slope and intercept. As a result, the observed linear relationships will generally become less clear, and the regression model will explain less of the variation in the data.
+
+However, the true linear relationship used to generate the data will remain the same because we are only adding random noise to the observations, not changing the original equation used to generate the data. Only the estimated regression lines may change. 
 
 
 ## Implement and investigate
