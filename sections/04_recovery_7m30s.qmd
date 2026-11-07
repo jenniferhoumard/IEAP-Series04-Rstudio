@@ -277,3 +277,24 @@ r7_indicators(c(compact(r7_models), list(`mono + drift` = r7_drift)), r7_rr) |>
   knitr::kable(digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
                caption = "Comparison including the mono-exponential + drift model")
 ```
+
+The mono-exponential + drift reproduces the bi-exponential: same fast time
+constant ($\tau \approx$ `r round(coef(r7_drift)["tau"], 1)` s), same slope.
+It has one parameter less and a lower AIC and BIC. This confirms that the
+"second phase" of the bi-exponential is a linear trend and not a second
+recovery process.
+
+Nested models (mono-exponential vs bi-exponential) can also be compared with an
+extra-sum-of-squares F-test:
+
+```{r}
+#| label: r7-ftest
+
+anova(r7_models$mono, r7_models$bi)
+```
+
+The F-test is highly significant, but this is not enough to choose the
+bi-exponential: its extra parameters are not interpretable, and the residuals
+are strongly autocorrelated (next section). This violates the independence
+assumption that the F-test and the standard errors rely on, so their p-values
+are far too optimistic.
