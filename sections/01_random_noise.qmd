@@ -140,20 +140,70 @@ multiplicative_noise <- rnorm(n, mean = 0, sd = 0.050)
 ```
 
 ```{r}
+# 3. Generate three datasets with increasing noise
+
 # Low noise level
-y_low <- data.frame( 
-  x = x, 
-  y_obs = y_true * (1 + multiplicative_noise) + additive_noise)
+y_low <- data.frame(
+  x = x,
+  y_obs = y_true * (1 + multiplicative_noise) + additive_noise
+)
+
+# Medium noise level
+y_medium <- data.frame(
+  x = x,
+  y_obs = y_true * (1 + 2 * multiplicative_noise) + 2 * additive_noise
+)
+
+# High noise level
+y_high <- data.frame(
+  x = x,
+  y_obs = y_true * (1 + 4 * multiplicative_noise) + 4 * additive_noise
+)
+
+```
+
+```{r}
+# 4. Define a function to add linear regression and confidence intervals to the datasets
+
+add_regression_to_data <- function(data, model, ci = 0.95) {
+
+  conf_interval <- predict(model, interval = "confidence", level = ci)
+  # Calculate the fitted values and confidence interval limits
+
+  data <- cbind(data, conf_interval)
+  # Add these values as new columns in the dataset
+
+  return(data) # Return the updated dataset
+}
+```
+
+### Visualize Synthetic Datasets
+
+```{r}
+# 5. Fit linear regression models to each dataset
+
+lm_low <- lm(y_obs ~ x, data = y_low) # low noise
+lm_medium <- lm(y_obs ~ x, data = y_medium) # medium noise
+lm_high <- lm(y_obs ~ x, data = y_high) # high noise
+
+# 6. Summary statistics for each model
+
+summary(lm_low)
+summary(lm_medium)
+summary(lm_high)
+```
+
+```{r}
+# 7. Apply the function to the three datasets
+
+# Low noise level
+y_low_ci <- add_regression_to_data(y_low, lm_low)
 
 # Medium noise: multiply both errors by 2
-y_medium <- data.frame( 
-  x = x, 
-  y_obs = y_true * (1 + 2 * multiplicative_noise) + 2 *  additive_noise)
+y_medium_ci <- add_regression_to_data(y_medium, lm_medium)
 
 # High noise: multiply both errors by 4
-y_high <- data.frame( 
-  x = x, 
-  y_obs = y_true * (1 + 4 * multiplicative_noise) + 4 *  additive_noise)
+y_high_ci <- add_regression_to_data(y_high, lm_high)
 
 #print(y_low)
 #print(y_medium)
@@ -163,8 +213,36 @@ y_high <- data.frame(
 
 
 
+```{r}
+# 8.Function to plot the datasets with its regression and confidence interval
+
+plot_regression <- function(data, title) {
+
+  ggplot(data, aes(x = x, y = y_obs)) +
+    geom_ribbon(aes(ymin = lwr, ymax = upr),
+                fill = "lightblue", alpha = 0.3) + # 95% confidence interval
+    geom_point() + # Observed data points
+    geom_line(aes(y = fit, color = "Estimated regression")) + # Fitted regression
+    geom_line(aes(y = 2 * x + 5, color = "True relationship")) + # True line
+    scale_color_manual(values = c(
+      "Estimated regression" = "blue",
+      "True relationship" = "red"
+    )) +
+    labs(title = title, x = "x", y = "Observed y", color = "Lines") +
+    theme_minimal()
+}
+
+# Generate the three plots separately
+plot_regression(y_low_ci, "Low Noise")
+plot_regression(y_medium_ci, "Medium Noise")
+plot_regression(y_high_ci, "High Noise")
+```
+
+
 
 ## Draw conclusions
+
+
 
 <!--
 Compare your numerical findings with your initial expectations.
