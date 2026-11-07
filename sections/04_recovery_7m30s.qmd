@@ -67,3 +67,6 @@ r7_rr |>
 
 r7_rr <- filter(r7_rr, !artefact)
 ```
+
+No interval was rejected, so the RR series is clean. All RR values stay between
+368 and 520 ms (115–163 bpm), which is physiologically plausible.
