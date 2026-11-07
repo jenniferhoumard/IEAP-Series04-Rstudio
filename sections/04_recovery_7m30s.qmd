@@ -320,3 +320,20 @@ ggplot(r7_res, aes(t, resid)) +
   labs(x = "Time from start of recording (s)", y = "Residual (bpm)") +
   theme_minimal()
 ```
+
+```{r}
+#| label: fig-r7-acf
+#| fig-cap: "Autocorrelation of the residuals (lags in beats). Dashed lines: approximate 95 % bounds for white noise."
+#| fig-height: 3.5
+
+r7_res |>
+  group_by(model) |>
+  reframe(lag = 0:30, acf = acf(resid, lag.max = 30, plot = FALSE)$acf[, 1, 1]) |>
+  ggplot(aes(lag, acf)) +
+  geom_hline(yintercept = 0) +
+  geom_hline(yintercept = c(-1, 1) * 1.96 / sqrt(nrow(r7_rr)), linetype = "dashed") +
+  geom_segment(aes(xend = lag, yend = 0)) +
+  facet_wrap(~model, nrow = 1) +
+  labs(x = "Lag (beats)", y = "ACF") +
+  theme_minimal()
+```
