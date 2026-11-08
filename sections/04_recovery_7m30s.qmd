@@ -3,21 +3,620 @@
 
 ### Test your predictions using the dataset
 
-<!--
-- Identify the exercise and recovery periods.
-- Extract and visualise heart rate as a function of time.
-- Identify the period corresponding to post-exercise recovery.
-- Fit appropriate mathematical models to the recovery data.
-- Compare the fitted models using appropriate statistical indicators
-  and residual analysis.
+The recording comes from an Aidlab chest strap (MIT licence). It lasts 450 s and
+contains ECG, beat-to-beat RR intervals, a 5-s pulse signal, respiration,
+3-axis acceleration and body position. All timestamps are Unix milliseconds
+(UTC). We express time in seconds from the start of the recording
+(`from_timestamp_ms` in `dataset.json`).
 
-You will have to test:
+#### Data import and preparation
 
-- A linear model.
-- A mono-exponential decay model.
-- A bi-exponential decay model, if justified by the data.
+An **RR interval** is the time, in milliseconds, between two successive
+heartbeats (two successive R waves of the ECG). Heart rate in beats per minute
+is obtained by dividing one minute (60 000 ms) by this interval:
 
-Do not select a model based on visual appearance alone.
-Consider goodness of fit, residual structure, model complexity
-and physiological interpretability.
--->
+$$HR = \frac{60\,000}{RR}$$
+
+For example, an RR interval of 400 ms corresponds to 150 bpm.
+
+We use the RR intervals as the **main signal**, because each heartbeat gives one
+HR value: about 1 000 points over the recording. The device's `pulse` signal
+gives only one HR value about every 5 s (91 values), so it describes the
+recovery curve much less precisely. We keep `pulse` as an **independent
+cross-check** of the RR-derived HR. We also import the **acceleration**, to find
+out when the participant is moving, because movement keeps HR high and
+therefore affects the recovery curve.
+
+```{r}
+#| label: r7-import
+
+# Folder containing the 7.5-min recording
+r7_dir <- "data/cardio-recovery-7m30s"
+
+# Read the metadata to get the exact start time of the recording
+r7_meta <- jsonlite::read_json(file.path(r7_dir, "dataset.json"))
+r7_t0 <- r7_meta$from_timestamp_ms   # start time (Unix ms)
+
+# Beat-to-beat heart rate from RR intervals
+r7_rr <- read_csv(file.path(r7_dir, "rr.csv"), show_col_types = FALSE) |>
+  mutate(t = (timestamp - r7_t0) / 1000,   # time from start, in seconds
+         rr = value,                       # RR interval, in ms
+         hr = 60000 / rr)                  # heart rate, in bpm
+
+# Device heart rate (one value every ~5 s), used as a cross-check
+r7_pulse <- read_csv(file.path(r7_dir, "pulse.csv"), show_col_types = FALSE) |>
+  mutate(t = (timestamp - r7_t0) / 1000,   # time from start, in seconds
+         hr = value)                       # heart rate, in bpm
+
+# Acceleration: one row per sample, with x, y and z in g
+r7_acc <- read_csv(file.path(r7_dir, "acceleration.csv"), show_col_types = FALSE) |>
+  mutate(t = (timestamp - r7_t0) / 1000,          # time from start, in seconds
+         mag = sqrt(x^2 + y^2 + z^2)) |>          # magnitude of the 3-axis vector
+  group_by(t = floor(t / 10) * 10 + 5) |>         # 10-s windows, centred
+  summarise(acc_sd = sd(mag), .groups = "drop")   # movement = SD within window
+
+# Summary of the signals used
+tibble(signal = c("RR intervals", "pulse", "acceleration (10-s windows)"),
+       n = c(nrow(r7_rr), nrow(r7_pulse), nrow(r7_acc)),
+       t_start_s = c(min(r7_rr$t), min(r7_pulse$t), min(r7_acc$t)),
+       t_end_s = c(max(r7_rr$t), max(r7_pulse$t), max(r7_acc$t))) |>
+  knitr::kable(digits = 1, caption = "Signals used in the analysis")
+```
+
+Before fitting anything, we check the RR intervals for artefacts (missed or
+extra beats). A common rule is to reject any interval that differs by more than
+20 % from the previous one.
+
+```{r}
+#| label: r7-artefacts
+
+# Flag RR intervals that differ by more than 20 % from the previous interval
+r7_rr <- r7_rr |>
+  mutate(rel_change = abs(rr / lag(rr) - 1),   # relative change vs previous beat
+         artefact = !is.na(rel_change) & rel_change > 0.20)
+
+# Quality summary
+r7_quality <- r7_rr |>
+  summarise(n_beats = n(),
+            n_artefacts = sum(artefact),
+            rr_min_ms = min(rr), rr_max_ms = max(rr),
+            hr_min_bpm = min(hr), hr_max_bpm = max(hr))
+
+knitr::kable(r7_quality, digits = 1, caption = "RR interval quality check")
+
+# Remove flagged intervals (if any)
+r7_rr <- filter(r7_rr, !artefact)
+```
+
+`r r7_quality$n_artefacts` interval(s) were rejected, so the RR series is
+clean. All RR values stay between `r r7_quality$rr_min_ms` and
+`r r7_quality$rr_max_ms` ms (`r round(r7_quality$hr_min_bpm)`–`r round(r7_quality$hr_max_bpm)`
+bpm), which is physiologically plausible.
+
+#### Identifying the exercise and recovery periods
+
+Before fitting any model, we look at how heart rate changes over the whole
+recording. This lets us find the exercise and recovery periods, and check
+whether the recovery is regular enough to be described by a single curve. We
+compare HR with the acceleration signal, because a change in physical activity
+also changes HR: if the participant keeps moving, HR stays higher than during
+passive rest.
+
+We do not plot the raw acceleration. The accelerometer measures gravity
+(about 1 g) as well as movement, so the raw values mostly reflect how the sensor
+is oriented. We therefore compute the **magnitude** of the acceleration vector,
+$\sqrt{x^2 + y^2 + z^2}$, which does not depend on orientation, and then its
+**standard deviation (SD) in 10-s windows**. When the participant is still, the
+magnitude stays close to 1 g and the SD is close to 0. When the participant
+moves, the magnitude varies and the SD increases. The SD is therefore a simple
+index of how much the participant is moving.
+
+```{r}
+#| label: fig-r7-overview
+#| fig-cap: "7.5-min recording. Top: beat-to-beat HR from RR intervals (grey) and device pulse (black). Bottom: movement (SD of acceleration magnitude, 10-s windows). The dashed line at 330 s marks the moment the participant stops moving."
+#| fig-height: 6
+
+# Time at which the participant stops moving (read from the acceleration plot)
+r7_t_still <- 330
+
+# Top panel: heart rate from RR (points) and from the device pulse (line)
+r7_p1 <- ggplot() +
+  geom_point(data = r7_rr, aes(t, hr), colour = "grey60", size = 0.6) +
+  geom_line(data = r7_pulse, aes(t, hr), linewidth = 0.7) +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  labs(x = NULL, y = "Heart rate (bpm)") +
+  theme_minimal()
+
+# Bottom panel: movement index (SD of acceleration magnitude)
+r7_p2 <- ggplot(r7_acc, aes(t, acc_sd)) +
+  geom_col(fill = "steelblue", width = 9) +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  labs(x = "Time from start of recording (s)", y = "Acceleration SD (g)") +
+  theme_minimal()
+
+# Stack the two panels
+patchwork::wrap_plots(r7_p1, r7_p2, ncol = 1, heights = c(2, 1))
+```
+
+What we observe:
+
+- **No exercise period is visible.** HR is already about 155 bpm in the first
+  seconds and starts falling right away. Exercise therefore ended before the
+  recording started, but we do not know when. So $t = 0$ is the start of the
+  recording, not the end of exercise.
+- **Fast phase (≈ 0–90 s):** HR drops from about 155 to 131 bpm while the
+  participant is moving (acceleration SD ≈ 0.2–0.27 g, a level consistent with
+  light activity such as walking).
+- **Short pause (≈ 80–100 s):** movement stops briefly (SD ≈ 0.02 g) and HR
+  reaches a local minimum (~131 bpm).
+- **Plateau (≈ 100–330 s):** movement starts again and HR stays around
+  130–137 bpm instead of continuing to fall. This is an **active recovery**.
+  The small HR rise around 240–290 s happens while the participant is moving.
+- **Rest (≈ 330–450 s):** movement almost stops (SD < 0.07 g) and HR drops
+  again, to about 124–130 bpm.
+- The body position signal only contains the label `unknown`, so it does not
+  help.
+
+We therefore consider the **whole recording (0–450 s) as the post-exercise
+recovery period**. However, the activity is not constant: it changes from
+active to passive recovery at about 330 s.
+
+The shape of the curve, a steep drop followed by a slower decrease towards a
+plateau, is what an exponential decay predicts (Section 2.1). The match is not
+perfect: HR does not decrease smoothly, because of the changes in movement. We
+therefore expect an exponential model to describe the general trend but not
+every fluctuation.
+
+Because $t = 0$ is not the end of exercise, we cannot estimate the true HR drop
+since the end of exercise. Suppose exercise ended $\delta$ seconds before the
+recording started. In a mono-exponential model, the excess HR at time $t$ of
+the recording is then
+
+$$a\,e^{-(t+\delta)/\tau} = \left(a\,e^{-\delta/\tau}\right) e^{-t/\tau}$$
+
+The unknown delay $\delta$ only changes the **amplitude** we estimate (it
+becomes $a\,e^{-\delta/\tau}$, smaller than the true drop), but it does **not**
+change the **time constant** $\tau$. Only $\tau$ can therefore be compared with
+the literature.
+
+#### Fitting the models
+
+We fit the three required models to the beat-to-beat HR:
+
+- **Linear:** $HR(t) = \beta_0 + \beta_1 t$. HR decreases at a **constant
+  rate** ($\beta_1$ bpm per second) and never levels off.
+- **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$. HR falls
+  **quickly at first, then more and more slowly**, and tends towards a plateau
+  $HR_\infty$. The time constant $\tau$ is the time needed for the excess HR
+  ($HR - HR_\infty$) to fall to about 37 % of its value.
+- **Bi-exponential:**
+  $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$. HR is the sum of
+  **two decays with different speeds**: a fast one ($\tau_1$) and a slow one
+  ($\tau_2$), which could reflect two physiological processes (vagal
+  reactivation and sympathetic withdrawal, Section 2.1).
+
+The linear model is fitted with `lm()`. The exponential models are non-linear
+in their parameters, so they are fitted by least squares with `nls()`, which
+starts from initial values and improves them step by step.
+
+**Starting values.** We chose them from the overview plot (@fig-r7-overview)
+and from plausible physiological values:
+
+- the plateau $HR_\infty$ is close to the lowest HR values reached
+  (≈ 110–130 bpm);
+- the amplitude $a$ (or $a_1 + a_2$) is roughly the drop from the start of the
+  recording to the plateau (≈ 155 − 130 = 25 bpm);
+- for the fast time constant, HR reaches the plateau after about 90 s, and an
+  exponential is almost finished after 2–3 $\tau$, so $\tau \approx 30$–50 s;
+- for the slow time constant, we tried several values (150, 400 and 1 000 s),
+  because the plot does not show it clearly.
+
+The bi-exponential is sensitive to starting values, so we try these three sets
+and keep the converged fit with the smallest residual sum of squares. We use
+the `port` algorithm, which accepts bounds: amplitudes $\ge 0$ and time
+constants $\ge 1$ s.
+
+```{r}
+#| label: r7-fit-functions
+
+# Fit a bi-exponential from several starting points and keep the best one
+r7_fit_biexp <- function(d) {
+  # Three sets of starting values (see text)
+  starts <- list(
+    list(hr_inf = 125, a1 = 25, tau1 = 40, a2 = 5,  tau2 = 150),
+    list(hr_inf = 110, a1 = 25, tau1 = 50, a2 = 25, tau2 = 1000),
+    list(hr_inf = 120, a1 = 20, tau1 = 30, a2 = 10, tau2 = 400)
+  )
+  # Try each set; return NULL instead of stopping if the fit fails
+  fits <- map(starts, \(s) tryCatch(
+    nls(hr ~ hr_inf + a1 * exp(-t / tau1) + a2 * exp(-t / tau2),
+        data = d, start = s, algorithm = "port",
+        lower = c(0, 0, 1, 0, 1),           # bounds: hr_inf, a1, tau1, a2, tau2
+        upper = c(200, 200, 1e4, 200, 1e5),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  fits <- compact(fits)                     # drop the failed fits
+  if (length(fits) == 0) return(NULL)       # no fit converged
+  fits[[which.min(map_dbl(fits, deviance))]] # best fit = smallest residual SS
+}
+
+# Fit the three models to a data set with columns t and hr
+r7_fit_models <- function(d) {
+  list(
+    linear = lm(hr ~ t, data = d),
+    mono = nls(hr ~ hr_inf + a * exp(-t / tau), data = d,
+               start = list(hr_inf = 130, a = 25, tau = 40)),
+    bi = r7_fit_biexp(d)
+  )
+}
+
+# Goodness-of-fit and residual indicators for a list of models
+r7_indicators <- function(models, d) {
+  imap(compact(models), \(m, name) {
+    e <- resid(m)                                      # residuals
+    tibble(model = name,
+           k = length(coef(m)),                        # number of parameters
+           RMSE = sqrt(mean(e^2)),                     # typical error (bpm)
+           R2 = 1 - sum(e^2) / sum((d$hr - mean(d$hr))^2), # explained variance
+           AIC = AIC(m),
+           BIC = BIC(m),
+           DW = sum(diff(e)^2) / sum(e^2),             # Durbin-Watson
+           acf_lag1 = acf(e, plot = FALSE)$acf[2],     # lag-1 autocorrelation
+           LjungBox_p = Box.test(e, lag = 10, type = "Ljung-Box")$p.value)
+  }) |>
+    list_rbind() |>
+    mutate(dAIC = AIC - min(AIC), .after = AIC)        # difference to best AIC
+}
+```
+
+To compare the models, we use two groups of indicators.
+
+**Goodness of fit and complexity:**
+
+- **RMSE** (root mean square error): the typical distance between the data and
+  the model, in bpm. Lower is better.
+- **R²**: the proportion of the HR variance explained by the model (0 to 1).
+  Higher is better, but it always increases when parameters are added.
+- **AIC** and **BIC** (Akaike and Bayesian information criteria): they reward a
+  good fit but **penalise the number of parameters** $k$, so a more complex
+  model is only preferred if it improves the fit enough. BIC penalises extra
+  parameters more strongly than AIC. Lower is better; **ΔAIC** is the
+  difference from the best model, and a ΔAIC above about 10 means that a model
+  is clearly worse.
+
+**Residual structure** (a good model leaves residuals that look like random
+noise, with no pattern over time):
+
+- **Durbin–Watson (DW)**: about 2 if successive residuals are independent;
+  values well below 2 mean that successive residuals are similar (positive
+  autocorrelation).
+- **Lag-1 autocorrelation**: the correlation between each residual and the next
+  one; close to 0 for independent residuals.
+- **Ljung–Box test**: tests whether the first 10 autocorrelations are all zero;
+  a small p-value means the residuals are not random.
+
+```{r}
+#| label: r7-fit-full
+
+# Fit the three models on the whole recording
+r7_models <- r7_fit_models(r7_rr)
+
+# Compute and display the indicators
+r7_ind <- r7_indicators(r7_models, r7_rr)
+
+knitr::kable(r7_ind, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
+             caption = "Model comparison on the whole recording (0–450 s, beat-to-beat HR)")
+```
+
+```{r}
+#| label: fig-r7-fits
+#| fig-cap: "Linear, mono-exponential and bi-exponential fits to the beat-to-beat heart rate (whole recording)."
+
+# Predictions of each model on a 1-s time grid
+r7_grid <- tibble(t = seq(0, max(r7_rr$t), by = 1))
+r7_pred <- imap(compact(r7_models), \(m, name)
+                mutate(r7_grid, model = name, hr = predict(m, newdata = r7_grid))) |>
+  list_rbind()
+
+# Data (grey points) and fitted curves (coloured lines)
+ggplot(r7_rr, aes(t, hr)) +
+  geom_point(colour = "grey70", size = 0.6) +
+  geom_line(data = r7_pred, aes(colour = model), linewidth = 0.9) +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  labs(x = "Time from start of recording (s)", y = "Heart rate (bpm)",
+       colour = "Model") +
+  theme_minimal()
+```
+
+#### Fitted parameters
+
+A good fit is not enough: the parameters must also be **estimated reliably**
+and have a **physiological meaning**. For each parameter we report its
+standard error (SE) and an approximate 95 % confidence interval (estimate
+± 1.96 SE). A narrow interval means the data determine the parameter well; a
+very wide interval means the data cannot tell its value. This is especially
+important for the time constants ($\tau$, $\tau_1$, $\tau_2$) and the plateau
+$HR_\infty$, which are the parameters we want to interpret.
+
+```{r}
+#| label: r7-params
+
+# Table of estimates, standard errors and Wald 95 % CI for one model
+r7_param_table <- function(m, name) {
+  s <- summary(m)$coefficients
+  tibble(model = name, parameter = rownames(s),
+         estimate = s[, 1], SE = s[, 2],
+         CI_low = s[, 1] - 1.96 * s[, 2],
+         CI_high = s[, 1] + 1.96 * s[, 2])
+}
+
+imap(compact(r7_models), r7_param_table) |>
+  list_rbind() |>
+  knitr::kable(digits = 3,
+               caption = "Fitted parameters (Wald 95 % CI, whole recording)")
+```
+
+- **Linear:** HR falls by `r round(-coef(r7_models$linear)["t"] * 60, 1)`
+  bpm/min on average. This model has no physiological meaning: it would predict
+  HR to keep falling indefinitely, which is impossible.
+- **Mono-exponential:** $\tau =$ `r round(coef(r7_models$mono)["tau"], 1)` s and
+  $HR_\infty =$ `r round(coef(r7_models$mono)["hr_inf"], 1)` bpm. All
+  parameters are precise and physiologically interpretable: HR tends towards
+  about `r round(coef(r7_models$mono)["hr_inf"])` bpm, the level kept up by the
+  active recovery.
+- **Bi-exponential:** the fast component
+  ($\tau_1 \approx$ `r round(coef(r7_models$bi)["tau1"], 1)` s) is plausible,
+  but the slow component is **not**:
+  $\tau_2 \approx$ `r round(coef(r7_models$bi)["tau2"])` s (more than 2 hours,
+  much longer than the 7.5-min recording),
+  $a_2 \approx$ `r round(coef(r7_models$bi)["a2"])` bpm, and
+  $HR_\infty \approx$ `r round(coef(r7_models$bi)["hr_inf"])` bpm, stuck at the
+  lower bound. When $\tau_2 \gg t$, $a_2 e^{-t/\tau_2} \approx a_2 - (a_2/\tau_2)\,t$.
+  The "slow exponential" is just a **straight line** with slope
+  `r round(-coef(r7_models$bi)["a2"] / coef(r7_models$bi)["tau2"] * 60, 2)`
+  bpm/min. $HR_\infty$, $a_2$ and $\tau_2$ cannot be estimated separately (the
+  model is not identifiable here), which is also why their standard errors are
+  so large.
+
+The data therefore do not contain a second exponential phase within 450 s. What
+the bi-exponential captures is a slow downward **drift**, caused mainly by the
+end of movement at 330 s. To check this, we fit a more parsimonious model with
+the same shape, a **mono-exponential plus a linear drift** (4 parameters instead
+of 5):
+
+$$HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$$
+
+```{r}
+#| label: r7-drift
+
+# Mono-exponential + linear drift (b = slope of the drift, bpm/s)
+r7_drift <- nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = r7_rr,
+                start = list(hr0 = 130, a = 25, tau = 40, b = 0))
+
+r7_param_table(r7_drift, "mono + drift") |>
+  knitr::kable(digits = 3, caption = "Mono-exponential + linear drift")
+
+# Compare all four models with the same indicators
+r7_ind_all <- r7_indicators(c(compact(r7_models), list(`mono + drift` = r7_drift)), r7_rr)
+
+knitr::kable(r7_ind_all, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
+             caption = "Comparison including the mono-exponential + drift model")
+```
+
+The mono-exponential + drift reproduces the bi-exponential: same fast time
+constant ($\tau \approx$ `r round(coef(r7_drift)["tau"], 1)` s), same slope.
+It has one parameter less and a lower AIC and BIC. This confirms that the
+"second phase" of the bi-exponential is a linear trend and not a second
+recovery process.
+
+Nested models (mono-exponential vs bi-exponential) can also be compared with an
+extra-sum-of-squares F-test:
+
+```{r}
+#| label: r7-ftest
+
+# Does adding the second exponential reduce the residual SS significantly?
+anova(r7_models$mono, r7_models$bi)
+```
+
+The F-test is highly significant, but this is not enough to choose the
+bi-exponential: its extra parameters are not interpretable, and the residuals
+are strongly autocorrelated (next section). This violates the independence
+assumption that the F-test and the standard errors rely on, so their p-values
+are far too optimistic.
+
+#### Residual analysis
+
+```{r}
+#| label: fig-r7-residuals
+#| fig-cap: "Residuals of each model versus time (whole recording). Blue line: LOESS smooth. A good model should leave residuals randomly scattered around 0."
+#| fig-height: 6
+
+# Residuals of the four models in one long table
+r7_res <- imap(c(compact(r7_models), list(`mono + drift` = r7_drift)),
+               \(m, name) tibble(model = name, t = r7_rr$t, resid = resid(m))) |>
+  list_rbind() |>
+  mutate(model = fct_inorder(model))   # keep the models in this order
+
+# Residuals vs time, one panel per model, with a smooth trend line
+ggplot(r7_res, aes(t, resid)) +
+  geom_hline(yintercept = 0) +
+  geom_point(size = 0.4, colour = "grey50") +
+  geom_smooth(method = "loess", formula = y ~ x, span = 0.2, se = FALSE,
+              colour = "steelblue") +
+  geom_vline(xintercept = r7_t_still, linetype = "dashed") +
+  facet_wrap(~model, ncol = 1) +
+  labs(x = "Time from start of recording (s)", y = "Residual (bpm)") +
+  theme_minimal()
+```
+
+```{r}
+#| label: fig-r7-acf
+#| fig-cap: "Autocorrelation of the residuals (lags in beats). Dashed lines: approximate 95 % bounds for white noise."
+#| fig-height: 3.5
+
+# Autocorrelation function of the residuals (lags 0 to 30 beats) for each model
+r7_res |>
+  group_by(model) |>
+  reframe(lag = 0:30, acf = acf(resid, lag.max = 30, plot = FALSE)$acf[, 1, 1]) |>
+  ggplot(aes(lag, acf)) +
+  geom_hline(yintercept = 0) +
+  # 95 % bounds expected if the residuals were white noise
+  geom_hline(yintercept = c(-1, 1) * 1.96 / sqrt(nrow(r7_rr)), linetype = "dashed") +
+  geom_segment(aes(xend = lag, yend = 0)) +
+  facet_wrap(~model, nrow = 1) +
+  labs(x = "Lag (beats)", y = "ACF") +
+  theme_minimal()
+```
+
+- **Linear:** residuals show a clear pattern: positive at the start, negative
+  in the middle, positive again. The model misses the curvature of the fast
+  phase. This is a systematic error, not noise.
+- **Mono-exponential:** the fast phase is captured well, but the residuals
+  become negative after 330 s, when the participant stops moving and HR drops
+  below the predicted plateau. There is also a negative dip around 100 s, which
+  matches the short pause in movement.
+- **Bi-exponential / mono + drift:** the end-of-recording trend is partly
+  absorbed, but slow waves remain (for example around 240–290 s, a period of
+  movement).
+- **For all models**, residuals stay strongly autocorrelated (lag-1 ACF between
+  `r round(min(r7_ind_all$acf_lag1), 2)` and `r round(max(r7_ind_all$acf_lag1), 2)`,
+  Durbin-Watson ≪ 2, Ljung-Box p ≈ 0). Part of this comes from the physiology:
+  beat-to-beat HR oscillates with breathing (respiratory sinus arrhythmia) and
+  with changes in movement. No smooth decay curve can capture this. As a
+  result, the AIC, standard errors and F-test computed on ~1 000 beats overstate
+  the evidence. The differences between models should be read as indicative.
+
+#### Sensitivity analyses
+
+The main analysis uses the whole recording (0–450 s). But the residuals show
+that the participant's activity changes at about 330 s: before, they are still
+moving (active recovery); after, they are almost still (passive rest). The
+decay models assume that the conditions stay the same during recovery, and
+this change is not part of any of them. We therefore refit the models **on the
+active part only (0–330 s)**, where the activity is roughly constant, and
+compare the results with the whole recording. If the estimates change a lot,
+they depend on the window chosen, and the end-of-movement drop is affecting the
+fit.
+
+We also check two choices about the data: (1) using the device's **pulse**
+signal instead of RR, and (2) averaging RR-derived HR into **5-s bins** to
+reduce beat-to-beat noise and autocorrelation.
+
+```{r}
+#| label: r7-sensitivity
+
+# Data sets for the sensitivity analysis
+r7_active <- filter(r7_rr, t <= r7_t_still)      # active recovery only
+r7_bins <- r7_rr |>                               # RR-derived HR averaged in 5-s bins
+  group_by(t = floor(t / 5) * 5 + 2.5) |>
+  summarise(hr = mean(hr), .groups = "drop")
+
+r7_sens <- list(
+  "RR, 0–450 s (main)" = r7_rr,
+  "RR, 0–330 s (active only)" = r7_active,
+  "Pulse, 0–450 s" = r7_pulse,
+  "RR 5-s bins, 0–450 s" = r7_bins
+)
+
+# Refit the three models on each data set and keep the key results
+r7_sens_tab <- imap(r7_sens, \(d, name) {
+  ms <- r7_fit_models(d)
+  ind <- r7_indicators(ms, d)
+  tau <- coef(ms$mono)["tau"]
+  tau_se <- summary(ms$mono)$coefficients["tau", 2]
+  tibble(dataset = name,
+         n = nrow(d),
+         tau_mono = unname(tau),
+         tau_low = unname(tau - 1.96 * tau_se),
+         tau_high = unname(tau + 1.96 * tau_se),
+         hr_inf_mono = unname(coef(ms$mono)["hr_inf"]),
+         dAIC_linear = ind$AIC[ind$model == "linear"] - ind$AIC[ind$model == "mono"],
+         bi_converged = !is.null(ms$bi),
+         tau2_bi = if (is.null(ms$bi)) NA_real_ else unname(coef(ms$bi)["tau2"]))
+}) |>
+  list_rbind()
+
+knitr::kable(r7_sens_tab, digits = 1,
+             col.names = c("Data", "n", "τ mono (s)", "CI low", "CI high",
+                           "HR∞ mono (bpm)", "AIC linear − AIC mono",
+                           "Bi-exp converged?", "τ₂ bi-exp (s)"),
+             caption = "Sensitivity of the results to the data and window used")
+
+# Shortcuts used in the text below
+r7_s_main <- r7_sens_tab[1, ]
+r7_s_act  <- r7_sens_tab[2, ]
+r7_tau_range_full <- range(r7_sens_tab$tau_mono[-2])   # all whole-recording fits
+```
+
+- The **mono-exponential time constant is robust to the signal**: between
+  `r round(r7_tau_range_full[1])` and `r round(r7_tau_range_full[2])` s on the
+  whole recording, whether we use RR, pulse or 5-s bins. It **does depend on
+  the window**. On the active window only it is shorter
+  (`r round(r7_s_act$tau_mono, 1)` s), close to the value obtained with the
+  drift term (`r round(coef(r7_drift)["tau"], 1)` s). On the whole recording,
+  the end-of-movement drop pulls the curve down and makes the exponential look
+  slower than it is.
+- The mono-exponential always beats the linear model by a large AIC margin
+  (at least `r round(min(r7_sens_tab$dAIC_linear))` AIC units).
+- When the activity is constant (0–330 s), **the bi-exponential cannot be
+  fitted at all**: there is no second exponential phase to estimate. Whenever it
+  does converge, its slow component degenerates into a linear drift
+  ($\tau_2$ of several thousand seconds).
+
+#### Summary of findings for this recording
+
+- The recording covers **recovery only**: exercise ended before the recording
+  started, at an unknown time. The recovery is **active** until ~330 s
+  (participant moving), then **passive**.
+- The **linear model** is clearly rejected: worst fit
+  (R² = `r round(r7_ind$R2[r7_ind$model == "linear"], 2)`), systematic
+  curvature in the residuals, and no physiological meaning.
+- The **mono-exponential model** is the best compromise. With only 3
+  parameters it explains most of the variance and gives an interpretable time
+  constant and a plateau
+  (`r round(min(r7_s_act$hr_inf_mono, r7_s_main$hr_inf_mono))`–`r round(max(r7_s_act$hr_inf_mono, r7_s_main$hr_inf_mono))` bpm) that
+  matches the HR kept up by ongoing movement. Its best estimate is the one
+  obtained on a window of constant activity:
+  **$\tau \approx$ `r round(r7_s_act$tau_mono)` s** (95 % CI
+  `r round(r7_s_act$tau_low)`–`r round(r7_s_act$tau_high)` s, 0–330 s). On the
+  whole recording $\tau \approx$ `r round(r7_s_main$tau_mono)` s, which is
+  biased upwards by the late drop.
+- The **mono-exponential + linear drift** has the lowest AIC/BIC on the whole
+  recording, but its drift term is purely empirical: a straight line cannot
+  continue forever. It is useful to show that the bi-exponential's "slow
+  phase" is only a trend, not as a physiological model.
+- The **bi-exponential model is not justified** here. Its slightly better
+  statistics come from a slow component that is mathematically a straight line
+  and physiologically meaningless ($\tau_2$ > 2 h). It cannot be fitted when the
+  activity is constant. A 7.5-min recording is too short to identify a true slow
+  recovery phase.
+- The **remaining structure** in the residuals (late drop, mid-recording wave,
+  autocorrelation) comes from **changes in physical activity and breathing**,
+  not from the decay law itself. Any HRR model applied to this recording should
+  account for the activity state (for example by fitting active and passive
+  phases separately).
+
+#### Link with our hypotheses
+
+- **H1 (mono-exponential better than linear): supported.** The
+  mono-exponential has a much lower AIC on every data set and less structured
+  residuals.
+- **H2 (bi-exponential better after intense exercise over a long period):
+  not tested in a meaningful way here.** The recording is short and starts
+  after exercise had already ended, so the conditions of H2 are not met. As
+  expected for a short recording, a mono-exponential is sufficient
+  [@pierpont2013]. Our time constants are nevertheless close to published
+  values: the mono-exponential $\tau$ on the whole recording
+  (`r round(r7_s_main$tau_mono)` s) is similar to the ≈ 65 s reported by
+  @joseph2023, and the fast component of our bi-exponential
+  ($\tau_1 \approx$ `r round(coef(r7_models$bi)["tau1"])` s) matches their
+  $\tau_1 \approx 44$ s. We do not find their slow component
+  ($\tau_2 \approx 120$ s): in our data, the slow decrease is driven by the end
+  of movement rather than by a second recovery process.
+- **H3 (movement makes HR deviate from the model, with a higher plateau
+  during active recovery): supported.** HR stays on a plateau of about
+  `r round(r7_s_act$hr_inf_mono)` bpm while the participant moves, drops below
+  the mono-exponential prediction when movement stops at ~330 s, and the
+  residuals follow the changes in movement. As in the walking recovery used by
+  @cole1999, active recovery keeps HR above its resting level.
