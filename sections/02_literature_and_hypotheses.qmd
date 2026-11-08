@@ -1,22 +1,111 @@
-## Formulate predictions from scientific literature (without AI)
+## Formulate predictions from scientific literature
 
-<!--
-Before analysing the data, investigate the scientific literature
-on heart rate recovery (HRR) after exercise.
+### Search strategy
 
-Use PubMed, Google Scholar or other scientific databases to identify:
+We started from the heart rate recovery (HRR) model presented in M. Desroches'
+course (Master IEAP, *Modelling using Dynamical Systems*) and from the scientific
+reference it cites [@cole1999]. We then searched Google Scholar and PubMed for
+articles on the modelling and physiology of HRR, using the keywords "heart rate
+recovery", "exponential" and "time constant". We selected a review on the
+physiological mechanisms [@pierpont2013] and a study comparing mono- and
+bi-exponential models [@joseph2023]. The study by Imai et al. (1994), cited in
+several of these articles, was not accessible, so we cite it through
+@pierpont2013.
 
-- What mathematical models have been proposed to describe heart rate recovery?
-- What physiological mechanisms explain the decrease in heart rate after exercise?
-- What are the expected characteristics of the recovery curve?
-- Does the literature suggest that one mathematical model is sufficient
-  to describe the entire recovery period?
+### Mathematical models of heart rate recovery
 
-Important:
-Your predictions must be based on your own reading and interpretation
-of scientific publications. Do not use AI at first, but you can check
-if you agree with AI, after AFTER exploring PubMed or Google Scholar.
+In the literature, HRR is described in two ways.
 
-Provide at least two scientific references and formulate your hypotheses
-about the mathematical model you expect to find.
--->
+**1. With a simple index.** @cole1999 defined HRR as the decrease in heart rate
+(HR) between peak exercise and the first minute after exercise. A decrease of
+12 bpm or less was considered abnormal and was a strong predictor of mortality.
+This index is easy to measure, but it does not describe the shape of the
+recovery curve.
+
+**2. With a continuous model.** The simplest model assumes that the rate of
+recovery is proportional to the difference between the current HR and the
+resting HR:
+
+$$HR'(t) = -k\,(HR - HR_{rest}), \qquad k > 0$$
+
+Its solution is a mono-exponential decay:
+
+$$HR(t) = HR_{rest} + (HR_0 - HR_{rest})\,e^{-kt}$$
+
+The time constant $\tau = 1/k$ is the time needed for the excess HR to fall to
+about 37% of its initial value.
+
+Other models can be considered:
+
+- a **linear model**, which assumes a constant decrease in HR. It is not
+  physiologically plausible, because it predicts that HR keeps falling
+  indefinitely;
+- a **bi-exponential model**, with two time constants (a fast phase and a slow
+  phase):
+
+  $$HR(t) = HR_{min} + A_1 e^{-t/\tau_1} + A_2 e^{-t/\tau_2}$$
+
+  @joseph2023 compared the two exponential models on 5 min of recovery after a
+  maximal treadmill test in 36 men. The mono-exponential model gave
+  $\tau \approx 65$ s, and the bi-exponential model gave $\tau_1 \approx 44$ s
+  and $\tau_2 \approx 120$ s. The bi-exponential model fitted better in 61% of
+  participants, and equally well in the others.
+
+### Physiological mechanisms
+
+HR depends on the intrinsic activity of the sinus node, modulated by the
+parasympathetic and sympathetic nervous systems [@pierpont2013]. During
+exercise, HR first increases through parasympathetic withdrawal, then through
+sympathetic activation as intensity increases [@cole1999; @pierpont2013]. When
+exercise stops, two mechanisms bring HR back towards rest: parasympathetic
+(vagal) reactivation and sympathetic withdrawal [@joseph2023].
+
+Their respective contributions over time are debated. Imai et al. (1994), cited
+by @pierpont2013, concluded that the immediate decrease in HR is mainly due to
+parasympathetic reactivation. This is consistent with the fact that plasma
+norepinephrine peaks about 1 min after intense exercise: sympathetic activity
+therefore remains high at the beginning of recovery [@pierpont2013].
+Sympathetic withdrawal is slower, because circulating catecholamines continue
+to act on the heart [@joseph2023].
+
+### Expected shape of the recovery curve
+
+Based on the mono-exponential model, we expect a recovery curve that:
+
+- decreases monotonically;
+- falls quickly at first, then more and more slowly;
+- tends towards a stable level (asymptote) without going below it.
+
+The first minute of recovery is critical: a decrease of 12 bpm or less during
+this minute is considered abnormal [@cole1999].
+
+### Is one model sufficient?
+
+The mono-exponential model relies on simplifying assumptions: $k$ and
+$HR_{rest}$ are constant, and recovery is described by a single time scale. It
+does not take into account continued movement, posture or measurement noise.
+In practice, recovery is often active: in the study by @cole1999, patients kept
+walking (2.4 km/h, 2.5% grade) during recovery, whereas in @joseph2023 they
+recovered lying supine.
+
+According to @pierpont2013, a simple exponential decay adequately describes
+recovery after low-intensity exercise, which is dominated by vagal
+reactivation, but recovery after intense exercise is more complex.
+@joseph2023 interpret the two time constants of the bi-exponential model as
+reflecting the combined action of the two branches of the autonomic nervous
+system, which have different kinetics. A single mono-exponential model may
+therefore not be sufficient to describe the entire recovery period, especially
+after intense exercise or over a long recording.
+
+### Our hypotheses
+
+- **H1:** the mono-exponential model will describe recovery better than the
+  linear model (lower AIC, less structured residuals).
+- **H2:** after intense exercise and over a sufficiently long period, the
+  bi-exponential model will fit better than the mono-exponential model, with a
+  fast time constant of about 40–60 s and a slower one of about 2 min
+  [@joseph2023]. For a short recording or after moderate exercise, a
+  mono-exponential model may be sufficient [@pierpont2013].
+- **H3:** periods during which the participant keeps moving will deviate from
+  the model, and the estimated plateau will be higher than resting HR during
+  active recovery.
