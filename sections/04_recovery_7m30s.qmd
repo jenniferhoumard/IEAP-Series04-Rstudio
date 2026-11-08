@@ -136,9 +136,9 @@ patchwork::wrap_plots(r7_p1, r7_p2, ncol = 1, heights = c(2, 1))
 What we observe:
 
 - **No exercise period is visible.** HR is already about 155 bpm in the first
-  seconds and starts falling right away. The exercise ended **before** the
-  recording started, and we do not know exactly when. So $t = 0$ is the start of
-  the recording, not the end of exercise.
+  seconds and starts falling right away. Exercise therefore ended before the
+  recording started, but we do not know when. So $t = 0$ is the start of the
+  recording, not the end of exercise.
 - **Fast phase (≈ 0–90 s):** HR drops from about 155 to 131 bpm while the
   participant is moving (acceleration SD ≈ 0.2–0.27 g, a level consistent with
   light activity such as walking).
@@ -154,15 +154,26 @@ What we observe:
   
 We therefore consider the **whole recording (0–450 s) as the post-exercise
 recovery period**. However, the activity is not constant: it changes from
-active to passive recovery at about 330 s. No decay model contains this change,
-so we also fit the models on the active part only (0–330 s) as a sensitivity
-analysis.
+active to passive recovery at about 330 s.
 
-Because $t = 0$ is not the end of exercise, the amplitude of an exponential is
-not the true HR drop since the end of exercise. The time constant $\tau$ is not
-affected, though: shifting time by $\delta$ in
-$a\,e^{-(t+\delta)/\tau}$ only multiplies the amplitude by $e^{-\delta/\tau}$.
-Only $\tau$ can be compared with the literature.
+The shape of the curve, a steep drop followed by a slower decrease towards a
+plateau, is what an exponential decay predicts (Section 2.1). The match is not
+perfect: HR does not decrease smoothly, because of the changes in movement. We
+therefore expect an exponential model to describe the general trend but not
+every fluctuation.
+
+Because $t = 0$ is not the end of exercise, we cannot estimate the true HR drop
+since the end of exercise. Suppose exercise ended $\delta$ seconds before the
+recording started. In a mono-exponential model, the excess HR at time $t$ of
+the recording is then
+
+$$a\,e^{-(t+\delta)/\tau} = \left(a\,e^{-\delta/\tau}\right) e^{-t/\tau}$$
+
+The unknown delay $\delta$ only changes the **amplitude** we estimate (it
+becomes $a\,e^{-\delta/\tau}$, smaller than the true drop), but it does **not**
+change the **time constant** $\tau$. Only $\tau$ can therefore be compared with
+the literature.
+
 #### Fitting the models
 
 We fit the three required models to the beat-to-beat HR:
