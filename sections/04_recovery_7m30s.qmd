@@ -156,7 +156,7 @@ What we observe:
   again, to about 124–130 bpm.
 - The body position signal only contains the label `unknown`, so it does not
   help.
-  
+
 We therefore consider the **whole recording (0–450 s) as the post-exercise
 recovery period**. However, the activity is not constant: it changes from
 active to passive recovery at about 330 s.
@@ -359,7 +359,7 @@ imap(compact(r7_models), r7_param_table) |>
 - **Linear:** HR falls by `r round(-coef(r7_models$linear)["t"] * 60, 1)`
   bpm/min on average. This model has no physiological meaning: it would predict
   HR to keep falling indefinitely, which is impossible.
-  - **Mono-exponential:** $\tau =$ `r round(coef(r7_models$mono)["tau"], 1)` s and
+- **Mono-exponential:** $\tau =$ `r round(coef(r7_models$mono)["tau"], 1)` s and
   $HR_\infty =$ `r round(coef(r7_models$mono)["hr_inf"], 1)` bpm. All
   parameters are precise and physiologically interpretable: HR tends towards
   about `r round(coef(r7_models$mono)["hr_inf"])` bpm, the level kept up by the
@@ -385,7 +385,6 @@ the same shape, a **mono-exponential plus a linear drift** (4 parameters instead
 of 5):
 
 $$HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$$
-
 
 ```{r}
 #| label: r7-drift
@@ -443,7 +442,8 @@ r7_res <- imap(c(compact(r7_models), list(`mono + drift` = r7_drift)),
 ggplot(r7_res, aes(t, resid)) +
   geom_hline(yintercept = 0) +
   geom_point(size = 0.4, colour = "grey50") +
-  geom_smooth(method = "loess", span = 0.2, se = FALSE, colour = "steelblue") +
+  geom_smooth(method = "loess", formula = y ~ x, span = 0.2, se = FALSE,
+              colour = "steelblue") +
   geom_vline(xintercept = r7_t_still, linetype = "dashed") +
   facet_wrap(~model, ncol = 1) +
   labs(x = "Time from start of recording (s)", y = "Residual (bpm)") +
@@ -469,9 +469,9 @@ r7_res |>
   theme_minimal()
 ```
 
-- **Linear:** residuals show a clear U-shaped pattern: positive at the start,
-  negative in the middle, positive again. The model misses the curvature of the
-  fast phase. This is a systematic error, not noise.
+- **Linear:** residuals show a clear pattern: positive at the start, negative
+  in the middle, positive again. The model misses the curvature of the fast
+  phase. This is a systematic error, not noise.
 - **Mono-exponential:** the fast phase is captured well, but the residuals
   become negative after 330 s, when the participant stops moving and HR drops
   below the predicted plateau. There is also a negative dip around 100 s, which
@@ -563,7 +563,7 @@ r7_tau_range_full <- range(r7_sens_tab$tau_mono[-2])   # all whole-recording fit
   fitted at all**: there is no second exponential phase to estimate. Whenever it
   does converge, its slow component degenerates into a linear drift
   ($\tau_2$ of several thousand seconds).
-  
+
 #### Summary of findings for this recording
 
 - The recording covers **recovery only**: exercise ended before the recording
