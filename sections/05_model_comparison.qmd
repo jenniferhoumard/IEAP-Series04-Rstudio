@@ -1,24 +1,6 @@
 
 ## Draw conclusions
 
-<!--
-Compare your numerical findings with your initial predictions.
-
-- Were your hypotheses supported by the data?
-- Which mathematical model best describes heart rate recovery?
-- Does the same model adequately describe both recordings?
-- Are there different recovery phases?
-- What are the limitations of your analysis?
-
-Support your conclusions with graphs, fitted parameters
-and statistical evidence.
-
-Final objective:
-Explain what mathematical model you would choose to describe
-heart rate recovery after exercise and justify your choice using
-both scientific literature and experimental evidence.
--->
-
 **Which mathematical model best describes heart rate recovery?**
 
 We compared linear, mono-exponential and bi-exponential models using two recordings: 7.5 min and 3h10 min.
@@ -26,16 +8,18 @@ We compared linear, mono-exponential and bi-exponential models using two recordi
 Based on both recordings, we would choose the mono-exponential model to describe the initial decrease in heart rate after exercise because it fits the data well, is relatively simple, and gives more reliable estimates as it has fewer parameters than the more complicated bi-exponential model.
 
 - **Linear:** Has 2 parameters and is the simplest model. It fits the initial HR recovery less well than the mono-exponential model as it assumes heart rate decreases at a constant rate.
-- **Mono-exponential:** Has 3 parameters and successfully fits the initial heart rate decrease and then more slowly. This is consistent with the recovery pattern described by @pierpont2013.
+- **Mono-exponential:** Has 3 parameters and describes a fast initial decrease in heart rate followed by a slower decrease. This is consistent with the recovery pattern described by @pierpont2013.
 - **Bi-exponential:** Has 5 parameters and allows two different recovery speeds as studied by @joseph2023. However, in the long recording, it fails to converge for Recovery 1 and gives difficult-to-interpret or unrealistic estimates for Recoveries 2 and 3. 
 
 **Results Supporting Model Choice**
+
+We compare the estimated time constants (τ) because they show how quickly heart rate decreases during recovery. We also use MAE and R² to check how well the models fit the data.
 
 | Recording | Statistical evidence | Conclusion |
 |---|---|---|
 | **3h10m — Recovery 1** | Compared with the linear model, mono-exponential reduces MAE from **4.9 to 3.4 bpm** and increases R² from **0.37 to 0.65**. Estimated τ ≈ **91 s**. See @fig-r3h-rec1. | Mono-exponential fits the initial heart rate decrease better than linear. |
 | **7.5-minute recording** | Mono-exponential gives τ ≈ **49 s** for the first 330 seconds and **63 s** for the full recording. See @fig-r7-fits. | Mono-exponential describes the initial decrease well, but the estimates depend on the recovery duration used. |
-| **Scientific literature** | @joseph2023 reported a recovery time constant of approximately **65 s**. | Our estimates are of a similar order, supporting the use of exponential models, although recovery conditions differ. |
+| **Scientific literature** | @joseph2023 reported τ ≈ **65 s** after maximal treadmill exercise, with participants recovering lying down. | Our estimated time constants are similar, but the recovery conditions differ because our recordings include possible movement and unknown exercise intensity. |
 
 **Are there different recovery phases?**
 
