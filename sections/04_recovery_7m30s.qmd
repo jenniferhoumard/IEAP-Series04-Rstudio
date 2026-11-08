@@ -30,27 +30,32 @@ therefore affects the recovery curve.
 ```{r}
 #| label: r7-import
 
+# Folder containing the 7.5-min recording
 r7_dir <- "data/cardio-recovery-7m30s"
+
+# Read the metadata to get the exact start time of the recording
 r7_meta <- jsonlite::read_json(file.path(r7_dir, "dataset.json"))
-r7_t0 <- r7_meta$from_timestamp_ms
+r7_t0 <- r7_meta$from_timestamp_ms   # start time (Unix ms)
 
 # Beat-to-beat heart rate from RR intervals
 r7_rr <- read_csv(file.path(r7_dir, "rr.csv"), show_col_types = FALSE) |>
-  mutate(t = (timestamp - r7_t0) / 1000,
-         rr = value,
-         hr = 60000 / rr)
+  mutate(t = (timestamp - r7_t0) / 1000,   # time from start, in seconds
+         rr = value,                       # RR interval, in ms
+         hr = 60000 / rr)                  # heart rate, in bpm
 
-# Device heart rate (one value every ~5 s)
+# Device heart rate (one value every ~5 s), used as a cross-check
 r7_pulse <- read_csv(file.path(r7_dir, "pulse.csv"), show_col_types = FALSE) |>
-  mutate(t = (timestamp - r7_t0) / 1000, hr = value)
+  mutate(t = (timestamp - r7_t0) / 1000,   # time from start, in seconds
+         hr = value)                       # heart rate, in bpm
 
-# Movement: SD of the acceleration magnitude in 10-s windows
+# Acceleration: one row per sample, with x, y and z in g
 r7_acc <- read_csv(file.path(r7_dir, "acceleration.csv"), show_col_types = FALSE) |>
-  mutate(t = (timestamp - r7_t0) / 1000,
-         mag = sqrt(x^2 + y^2 + z^2)) |>
-  group_by(t = floor(t / 10) * 10 + 5) |>
-  summarise(acc_sd = sd(mag), .groups = "drop")
+  mutate(t = (timestamp - r7_t0) / 1000,          # time from start, in seconds
+         mag = sqrt(x^2 + y^2 + z^2)) |>          # magnitude of the 3-axis vector
+  group_by(t = floor(t / 10) * 10 + 5) |>         # 10-s windows, centred
+  summarise(acc_sd = sd(mag), .groups = "drop")   # movement = SD within window
 
+# Summary of the signals used
 tibble(signal = c("RR intervals", "pulse", "acceleration (10-s windows)"),
        n = c(nrow(r7_rr), nrow(r7_pulse), nrow(r7_acc)),
        t_start_s = c(min(r7_rr$t), min(r7_pulse$t), min(r7_acc$t)),
@@ -65,8 +70,9 @@ extra beats). A common rule is to reject any interval that differs by more than
 ```{r}
 #| label: r7-artefacts
 
+# Flag RR intervals that differ by more than 20 % from the previous interval
 r7_rr <- r7_rr |>
-  mutate(rel_change = abs(rr / lag(rr) - 1),
+  mutate(rel_change = abs(rr / lag(rr) - 1),   # relative change vs previous beat
          artefact = !is.na(rel_change) & rel_change > 0.20)
 
 r7_rr |>
@@ -89,8 +95,10 @@ No interval was rejected, so the RR series is clean. All RR values stay between
 #| fig-cap: "7.5-min recording. Top: beat-to-beat HR from RR intervals (grey) and device pulse (black). Bottom: movement (SD of acceleration magnitude, 10-s windows). The dashed line at 330 s marks the moment the participant stops moving."
 #| fig-height: 6
 
+# Time at which the participant stops moving (read from the acceleration plot)
 r7_t_still <- 330
 
+# Top panel: heart rate from RR (points) and from the device pulse (line)
 r7_p1 <- ggplot() +
   geom_point(data = r7_rr, aes(t, hr), colour = "grey60", size = 0.6) +
   geom_line(data = r7_pulse, aes(t, hr), linewidth = 0.7) +
@@ -98,12 +106,14 @@ r7_p1 <- ggplot() +
   labs(x = NULL, y = "Heart rate (bpm)") +
   theme_minimal()
 
+# Bottom panel: movement index (SD of acceleration magnitude)
 r7_p2 <- ggplot(r7_acc, aes(t, acc_sd)) +
   geom_col(fill = "steelblue", width = 9) +
   geom_vline(xintercept = r7_t_still, linetype = "dashed") +
   labs(x = "Time from start of recording (s)", y = "Acceleration SD (g)") +
   theme_minimal()
 
+# Stack the two panels
 patchwork::wrap_plots(r7_p1, r7_p2, ncol = 1, heights = c(2, 1))
 ```
 
@@ -154,22 +164,26 @@ fit. We use the `port` algorithm with bounds ($a_i \ge 0$, $\tau_i \ge 1$ s).
 
 # Fit a bi-exponential from several starting points and keep the best one
 r7_fit_biexp <- function(d) {
+  # Three sets of starting values (see text)
   starts <- list(
     list(hr_inf = 125, a1 = 25, tau1 = 40, a2 = 5,  tau2 = 150),
     list(hr_inf = 110, a1 = 25, tau1 = 50, a2 = 25, tau2 = 1000),
     list(hr_inf = 120, a1 = 20, tau1 = 30, a2 = 10, tau2 = 400)
   )
+  # Try each set; return NULL instead of stopping if the fit fails
   fits <- map(starts, \(s) tryCatch(
     nls(hr ~ hr_inf + a1 * exp(-t / tau1) + a2 * exp(-t / tau2),
         data = d, start = s, algorithm = "port",
-        lower = c(0, 0, 1, 0, 1), upper = c(200, 200, 1e4, 200, 1e5),
+        lower = c(0, 0, 1, 0, 1),           # bounds: hr_inf, a1, tau1, a2, tau2
+        upper = c(200, 200, 1e4, 200, 1e5),
         control = list(maxiter = 500)),
     error = function(e) NULL))
-  fits <- compact(fits)
-  if (length(fits) == 0) return(NULL)
-  fits[[which.min(map_dbl(fits, deviance))]]
+  fits <- compact(fits)                     # drop the failed fits
+  if (length(fits) == 0) return(NULL)       # no fit converged
+  fits[[which.min(map_dbl(fits, deviance))]] # best fit = smallest residual SS
 }
 
+# Fit the three models to a data set with columns t and hr
 r7_fit_models <- function(d) {
   list(
     linear = lm(hr ~ t, data = d),
@@ -179,29 +193,32 @@ r7_fit_models <- function(d) {
   )
 }
 
-# Indicators of goodness of fit and residual structure
+# Goodness-of-fit and residual indicators for a list of models
 r7_indicators <- function(models, d) {
   imap(compact(models), \(m, name) {
-    e <- resid(m)
+    e <- resid(m)                                      # residuals
     tibble(model = name,
-           k = length(coef(m)),
-           RMSE = sqrt(mean(e^2)),
-           R2 = 1 - sum(e^2) / sum((d$hr - mean(d$hr))^2),
+           k = length(coef(m)),                        # number of parameters
+           RMSE = sqrt(mean(e^2)),                     # typical error (bpm)
+           R2 = 1 - sum(e^2) / sum((d$hr - mean(d$hr))^2), # explained variance
            AIC = AIC(m),
            BIC = BIC(m),
-           DW = sum(diff(e)^2) / sum(e^2),        # Durbin-Watson
-           acf_lag1 = acf(e, plot = FALSE)$acf[2],
+           DW = sum(diff(e)^2) / sum(e^2),             # Durbin-Watson
+           acf_lag1 = acf(e, plot = FALSE)$acf[2],     # lag-1 autocorrelation
            LjungBox_p = Box.test(e, lag = 10, type = "Ljung-Box")$p.value)
   }) |>
     list_rbind() |>
-    mutate(dAIC = AIC - min(AIC), .after = AIC)
+    mutate(dAIC = AIC - min(AIC), .after = AIC)        # difference to best AIC
 }
 ```
 
 ```{r}
 #| label: r7-fit-full
 
+# Fit the three models on the whole recording
 r7_models <- r7_fit_models(r7_rr)
+
+# Compute and display the indicators
 r7_ind <- r7_indicators(r7_models, r7_rr)
 
 knitr::kable(r7_ind, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
@@ -212,11 +229,13 @@ knitr::kable(r7_ind, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
 #| label: fig-r7-fits
 #| fig-cap: "Linear, mono-exponential and bi-exponential fits to the beat-to-beat heart rate (whole recording)."
 
+# Predictions of each model on a 1-s time grid
 r7_grid <- tibble(t = seq(0, max(r7_rr$t), by = 1))
 r7_pred <- imap(compact(r7_models), \(m, name)
                 mutate(r7_grid, model = name, hr = predict(m, newdata = r7_grid))) |>
   list_rbind()
 
+# Data (grey points) and fitted curves (coloured lines)
 ggplot(r7_rr, aes(t, hr)) +
   geom_point(colour = "grey70", size = 0.6) +
   geom_line(data = r7_pred, aes(colour = model), linewidth = 0.9) +
@@ -231,6 +250,7 @@ ggplot(r7_rr, aes(t, hr)) +
 ```{r}
 #| label: r7-params
 
+# Table of estimates, standard errors and Wald 95 % CI for one model
 r7_param_table <- function(m, name) {
   s <- summary(m)$coefficients
   tibble(model = name, parameter = rownames(s),
@@ -278,6 +298,7 @@ $$HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$$
 ```{r}
 #| label: r7-drift
 
+# Mono-exponential + linear drift (b = slope of the drift, bpm/s)
 r7_drift <- nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = r7_rr,
                 start = list(hr0 = 130, a = 25, tau = 40, b = 0))
 
@@ -301,6 +322,7 @@ extra-sum-of-squares F-test:
 ```{r}
 #| label: r7-ftest
 
+# Does adding the second exponential reduce the residual SS significantly?
 anova(r7_models$mono, r7_models$bi)
 ```
 
@@ -317,11 +339,13 @@ are far too optimistic.
 #| fig-cap: "Residuals of each model versus time (whole recording). Blue line: LOESS smooth. A good model should leave residuals randomly scattered around 0."
 #| fig-height: 6
 
+# Residuals of the four models in one long table
 r7_res <- imap(c(compact(r7_models), list(`mono + drift` = r7_drift)),
                \(m, name) tibble(model = name, t = r7_rr$t, resid = resid(m))) |>
   list_rbind() |>
-  mutate(model = fct_inorder(model))
+  mutate(model = fct_inorder(model))   # keep the models in this order
 
+# Residuals vs time, one panel per model, with a smooth trend line
 ggplot(r7_res, aes(t, resid)) +
   geom_hline(yintercept = 0) +
   geom_point(size = 0.4, colour = "grey50") +
@@ -337,11 +361,13 @@ ggplot(r7_res, aes(t, resid)) +
 #| fig-cap: "Autocorrelation of the residuals (lags in beats). Dashed lines: approximate 95 % bounds for white noise."
 #| fig-height: 3.5
 
+# Autocorrelation function of the residuals (lags 0 to 30 beats) for each model
 r7_res |>
   group_by(model) |>
   reframe(lag = 0:30, acf = acf(resid, lag.max = 30, plot = FALSE)$acf[, 1, 1]) |>
   ggplot(aes(lag, acf)) +
   geom_hline(yintercept = 0) +
+  # 95 % bounds expected if the residuals were white noise
   geom_hline(yintercept = c(-1, 1) * 1.96 / sqrt(nrow(r7_rr)), linetype = "dashed") +
   geom_segment(aes(xend = lag, yend = 0)) +
   facet_wrap(~model, nrow = 1) +
@@ -375,8 +401,9 @@ to reduce beat-to-beat noise and autocorrelation.
 ```{r}
 #| label: r7-sensitivity
 
-r7_active <- filter(r7_rr, t <= r7_t_still)
-r7_bins <- r7_rr |>
+# Data sets for the sensitivity analysis
+r7_active <- filter(r7_rr, t <= r7_t_still)      # active recovery only
+r7_bins <- r7_rr |>                               # RR-derived HR averaged in 5-s bins
   group_by(t = floor(t / 5) * 5 + 2.5) |>
   summarise(hr = mean(hr), .groups = "drop")
 
@@ -387,6 +414,7 @@ r7_sens <- list(
   "RR 5-s bins, 0–450 s" = r7_bins
 )
 
+# Refit the three models on each data set and keep the key results
 r7_sens_tab <- imap(r7_sens, \(d, name) {
   ms <- r7_fit_models(d)
   ind <- r7_indicators(ms, d)
