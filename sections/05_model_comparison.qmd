@@ -18,3 +18,14 @@ Explain what mathematical model you would choose to describe
 heart rate recovery after exercise and justify your choice using
 both scientific literature and experimental evidence.
 -->
+
+We compared linear, mono-exponential and bi-exponential models using two recordings: 7.5 min and 3h10 min to describe heart rate recovery after exercise.
+
+Based on both recordings, we would choose the mono-exponential model to describe the initial decrease in heart rate after exercise because it fits the data well, is relatively simple, and gives more reliable estimates as it has fewer parameters than the more complicated bi-exponential model.
+
+- **Linear:** Has 2 parameters and is the simplest model. It fits the initial HR recovery less well than the mono-exponential model as it assumes heart rate decreases at a constant rate.
+- **Mono-exponential:** Has 3 parameters and successfully fits the initial heart rate decrease. Allows heart rate to decrease quickly at first and then more slowly.
+- **Bi-exponential:** Has 5 parameters, making it harder to fit. It fails to converge for Recovery 1 and gives difficult-to-interpret or unrealistic estimates for Recoveries 2 and 3. Just because a bi-exponential model fits the data does not prove that the heart is recovering through two separate exponential processes.
+
+The mono-exponential model was the best model for both recordings, but does not describe every part equally well. For longer recovery periods, adding linear drift to the model can help describe the continued slow decrease at a constant rate without assuming a second exponential recovery process. 
+
