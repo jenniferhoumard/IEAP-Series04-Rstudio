@@ -20,3 +20,7 @@ The master document only contains the YAML header, the setup chunk and one `incl
 | 7.5-min recording | `04_recovery_7m30s.qmd` | `04_recovery_7m30s` | Alexis |
 | Conclusions | `05_model_comparison.qmd` | `05_model_comparison` | Jennifer |
 | Git workflow | `06_git_workflow.qmd` | `06_git_workflow` | Alexis |
+
+: The branch names follow a single pattern, `<section number>_<topic>`, so each branch can be matched to its file and to its question at a glance. Because two people never edit the same file, the branches could be developed in parallel without merge conflicts. The only shared file, `references.bib`, was edited on a single branch (`02_literature_and_hypotheses`).
+
+Since all sections are rendered in the same R session, two sections could overwrite each other's objects (for example two different `models` or `data` objects). To avoid this, each section prefixes its objects and chunk labels: `r7_` / `r7-` for the 7.5-min recording and `r3h_` / `r3h-` for the 3h10m recording.
