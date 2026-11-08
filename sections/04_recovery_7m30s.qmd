@@ -596,3 +596,27 @@ r7_tau_range_full <- range(r7_sens_tab$tau_mono[-2])   # all whole-recording fit
   not from the decay law itself. Any HRR model applied to this recording should
   account for the activity state (for example by fitting active and passive
   phases separately).
+
+#### Link with our hypotheses
+
+- **H1 (mono-exponential better than linear): supported.** The
+  mono-exponential has a much lower AIC on every data set and less structured
+  residuals.
+- **H2 (bi-exponential better after intense exercise over a long period):
+  not tested in a meaningful way here.** The recording is short and starts
+  after exercise had already ended, so the conditions of H2 are not met. As
+  expected for a short recording, a mono-exponential is sufficient
+  [@pierpont2013]. Our time constants are nevertheless close to published
+  values: the mono-exponential $\tau$ on the whole recording
+  (`r round(r7_s_main$tau_mono)` s) is similar to the ≈ 65 s reported by
+  @joseph2023, and the fast component of our bi-exponential
+  ($\tau_1 \approx$ `r round(coef(r7_models$bi)["tau1"])` s) matches their
+  $\tau_1 \approx 44$ s. We do not find their slow component
+  ($\tau_2 \approx 120$ s): in our data, the slow decrease is driven by the end
+  of movement rather than by a second recovery process.
+- **H3 (movement makes HR deviate from the model, with a higher plateau
+  during active recovery): supported.** HR stays on a plateau of about
+  `r round(r7_s_act$hr_inf_mono)` bpm while the participant moves, drops below
+  the mono-exponential prediction when movement stops at ~330 s, and the
+  residuals follow the changes in movement. As in the walking recovery used by
+  @cole1999, active recovery keeps HR above its resting level.
