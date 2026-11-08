@@ -102,10 +102,6 @@ If we generated different random errors for each dataset, some errors could part
 By keeping the same error pattern and increasing only its magnitude, we can more clearly observe how increasing noise affects the regression results.
 
 ```{r}
-# Import libraries
-library(tidyverse)
-library(lmtest)
-
 # 1. Define the true linear relationship
 
 set.seed(123) # reproduces the same random numbers every time the code is run
@@ -326,7 +322,9 @@ The estimated intercept is 5.558 and the slope is 1.886, showing the largest dif
 
 The regression plot shows much greater scatter around the line, and the confidence interval is considerably wider. Although the estimated regression line still follows the overall linear trend, its coefficients are less precise.
 
-As noise increases, the estimated coefficients move further from the true values in this experiment. At the same time, R² decreases, while the residual and slope standard errors increase.
+As noise increases, the estimated coefficients move further from the true values. This happens because of how we designed the experiment: we multiply the same random errors by 1, 2 and 4. With different random errors, the coefficients might not follow the same pattern.
+
+We also examine how noise affects the quality of the regression model. As noise increases, R² decreases, meaning the model explains less of the variation in the data. At the same time, the standard errors increase, meaning our estimates become less precise.
 
 The slope remains statistically significant in all three models (p-value < 0.001). This means that even at high noise levels, there is strong evidence of a linear relationship, although the model explains less of the observed variation.
 
@@ -384,7 +382,7 @@ For the Breusch–Pagan test, all p-values are also greater than 0.05. Therefore
 
 Our main expectations were confirmed. As random noise increased, the observations became more scattered, the regression models explained less variation, and the estimated coefficients became less precise.
 
-The differences between the three models support this. R² decreased from 0.958 to 0.563, while the residual standard error increased from 1.219 to 4.877. The slope and intercept also moved further from their true values. However, the slope became smaller and the intercept larger, showing that random noise does not necessarily change regression coefficients in a particular direction.
+The differences between the three models support this. R² decreased from 0.958 to 0.563, while the residual standard error increased from 1.219 to 4.877. The slope and intercept also moved further from their true values. 
 
 These results suggest that increasing noise reduces regression fit and prediction precision. With more noise, individual observations are harder to predict accurately, and we become less certain about the estimated relationship. However, all three models still detected a statistically significant linear relationship, showing that a relationship can remain detectable even when the observations contain substantial noise.
 
@@ -396,8 +394,94 @@ We could also test additive and multiplicative noise separately to better unders
 
 Another improvement would be to evaluate the models using a separate test dataset. This would allow us to measure how increasing noise affects the accuracy of predictions on new observations, rather than only evaluating how well the models fit the original data.
 
-Finally, we could extend the experiment to other relationships, such as quadratic, polynomial or exponential relationships, because real-world data do not always follow a straight line. We could then investigate whether increasing noise has similar effects on different types of regression models.
+We could extend the experiment to other relationships, such as quadratic, polynomial or exponential relationships, because real-world data do not always follow a straight line. We could then investigate whether increasing noise has similar effects on different types of regression models.
 
 We could also compare these models with more flexible machine learning methods. Unlike models where we choose a specific equation, some machine learning methods can learn complex patterns directly from the data. This could be useful when the underlying relationship is unknown.
 
 However, more flexible models are not necessarily better because they may also learn random errors rather than the true relationship, which is called overfitting. By comparing the models at different noise levels and evaluating their predictions on separate test data, we could investigate whether more flexible models improve prediction accuracy or become more sensitive to noise.
+
+### Carry Out New Experiment
+
+To better understand how noise affects regression, we repeat the experiment 1,000 times for each noise level, generating new random errors each time.
+
+Unlike our first experiment, which only shows one possible result, repeating the simulation helps us understand the general effect of increasing noise. This helps us see whether more noise causes the estimates to become less precise, rather than consistently increasing or decreasing.
+
+We keep the true relationship ($y = 2x + 5$) and the 120 x-values unchanged. We then compare the mean and standard deviation (SD) of the estimated slopes and intercepts.
+
+**Repeat the Experiment 1000 Times:**
+
+```{r}
+
+# Repeat the experiment 1000 times for each noise level
+
+set.seed(456)
+
+results <- data.frame() # store all estimates (total 3,000 rows)
+
+for (level in c(1, 2, 4)) {           # Loop over different noise levels 
+
+  estimates <- replicate(1000, {  # stores slope and intercept for 1000 simulations
+
+    # 1. Generate new random errors each time
+    additive <- rnorm(n, mean = 0, sd = 1)
+    multiplicative <- rnorm(n, mean = 0, sd = 0.05)
+
+    # 2. Generate observations with the chosen noise level
+    y_obs <- y_true * (1 + level * multiplicative) + level * additive
+
+    # 3. Fit the linear regression 
+    model <- lm(y_obs ~ x)
+    
+    # 4. Extract the estimated coefficients (intercept and slope)
+    coef(model)
+    
+    })
+    
+    # 5. Create a table with the 1000 estimates
+new_results <- data.frame(
+  Noise = level,
+  Intercept = estimates[1, ], # second row contains the slope estimates
+  Slope = estimates[2, ] # third row contains the intercept estimates
+)
+
+# 6. Add these estimates to the results table
+results <- rbind(results, new_results)
+
+}
+
+# 7. Calculate the mean and SD for each noise level
+comparison_1000 <- results |>
+  group_by(Noise) |>
+  summarise(
+    Mean_Intercept = mean(Intercept),
+    SD_Intercept = sd(Intercept),
+    Mean_Slope = mean(Slope),
+    SD_Slope = sd(Slope),
+    .groups = "drop" # prevent grouping in the output
+  )
+
+# Display the results in a table
+knitr::kable(comparison_1000, digits = 3) 
+
+```
+After 1,000 simulations for each noise level, the average slope stays close to the true value of 2, and the average intercept stays close to 5. However, their standard deviations increase as noise increases.
+
+**Visualize the Results:**
+
+A boxplot helps us see how much the estimated slopes vary across the 1,000 simulations compared with the true slope of 2 (dashed line). 
+
+```{r}
+# Compare the slope estimates for each noise level
+ggplot(results, aes(x = factor(Noise), y = Slope)) + # factor creates 3 seperate box plots for each noise level
+  geom_boxplot() +
+  geom_hline(yintercept = 2, linetype = "dashed") +
+  labs(
+    title = "Slope estimates across 1000 simulations",
+    x = "Noise level",
+    y = "Estimated slope"
+  )
+```
+The boxplots show that the spread of estimated slopes becomes wider as noise increases, while the values remain centered around the true slope of 2 (dashed line). This makes the effect of increasing noise easier to see.
+
+This shows that more noise makes the regression estimates less precise, but does not consistently make them larger or smaller. It does not cause change in any particular direction. Repeating the experiment gives us a more reliable conclusion than using only one simulation.
+
