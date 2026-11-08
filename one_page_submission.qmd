@@ -12,8 +12,20 @@ format:
     toc: false
     number-sections: false
     pdf-engine: xelatex
+    papersize: a4
     fontsize: 10pt
-    geometry: margin=2cm
+    geometry:
+      - top=1.3cm
+      - bottom=1.45cm
+      - left=1.8cm
+      - right=1.8cm
+    include-in-header:
+      text: |
+        \usepackage{titling}
+        \setlength{\droptitle}{-1.2cm}
+        \usepackage{enumitem}
+        \setlist[itemize]{itemsep=1pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+        \linespread{0.98}
 ---
 
 [GitHub repository](https://github.com/jenniferhoumard/IEAP-Series04-Rstudio)
