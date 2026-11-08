@@ -475,3 +475,247 @@ We fitted the three models to each recovery period, with $t = 0$ at the end of t
 - The bi-exponential model follows both phases. Its fast component ($\tau_1 \approx 174$ s, i.e. about 3 min; amplitude ≈ 21 bpm) describes the early recovery. However, its slow component is not physiologically interpretable: $\tau_2 \approx 16\,400$ s (about 4.5 h, longer than the recording itself) and the plateau ($HR_\infty \approx 31$ bpm) is far below any plausible resting heart rate. When $\tau_2$ is much longer than the observation window, $a_2 e^{-t/\tau_2}$ behaves like a straight line: the "slow phase" is in fact a linear drift of about 0.2 bpm/min. The same behaviour was observed on the 7.5-min recording.
 
 The time constants of the fast phase (91 s for recovery 1, 174 s for recovery 3) are of the same order of magnitude as those reported in the literature, although longer than the 44–65 s found by @joseph2023 after a maximal test with supine recovery. The intensity of exercise in our recording is unknown, and recovery took place without controlled posture, which may explain part of this difference. The models are compared quantitatively in the next section.
+
+
+### Model comparison and residual analysis
+
+```{r}
+#| label: r3h-compare
+
+# ---------------------------------------------------------------
+# 5a. Fourth model: mono-exponential + linear drift
+#     HR = hr0 + a * exp(-t / tau) + b * t
+#     (same test as in the 7.5-min analysis)
+# ---------------------------------------------------------------
+r3h_fit_drift <- function(d) {
+  hr_start <- mean(d$hr[d$t < 30])
+  hr_end   <- median(d$hr[d$t > 0.8 * max(d$t)])
+  amp      <- max(hr_start - hr_end, 1)
+
+  # try several starting values for tau, keep the best converged fit
+  fits <- map(c(60, 120, 300), \(tau0) tryCatch(
+    nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = d,
+        start = list(hr0 = hr_end, a = amp, tau = tau0, b = 0),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  fits <- compact(fits)
+  if (length(fits) == 0) NULL else fits[[which.min(map_dbl(fits, deviance))]]
+}
+
+# Add this model to the list of models of each recovery
+r3h_rec <- r3h_rec |>
+  mutate(models = map2(models, data, \(ms, d)
+                       c(ms, list(`mono + drift` = r3h_fit_drift(d)))))
+
+# ---------------------------------------------------------------
+# 5b. Indicators of goodness of fit and residual structure
+# ---------------------------------------------------------------
+r3h_indicators <- function(models, d) {
+  imap(compact(models), \(m, name) {
+    e <- resid(m)                                       # residuals
+    tibble(
+      model      = name,
+      k          = length(coef(m)),                     # number of parameters
+      RMSE       = sqrt(mean(e^2)),                     # typical error (bpm)
+      R2         = 1 - sum(e^2) / sum((d$hr - mean(d$hr))^2),
+      AIC        = AIC(m),                              # lower = better
+      BIC        = BIC(m),                              # lower = better (penalises k more)
+      DW         = sum(diff(e)^2) / sum(e^2),           # Durbin-Watson: 2 = independent
+      acf_lag1   = acf(e, plot = FALSE)$acf[2],         # correlation with previous residual
+      LjungBox_p = Box.test(e, lag = 10, type = "Ljung-Box")$p.value
+    )
+  }) |>
+    list_rbind() |>
+    mutate(dAIC = AIC - min(AIC), .after = AIC)         # difference with the best model
+}
+
+r3h_ind <- r3h_rec |>
+  mutate(ind = map2(models, data, r3h_indicators)) |>
+  select(label, ind) |>
+  unnest(ind)
+
+knitr::kable(r3h_ind, digits = c(0, 0, 0, 2, 3, 0, 0, 0, 2, 2, 3),
+             caption = "Model comparison for each recovery period")
+```
+```{r}
+# Nice names for the models (used as panel titles)
+r3h_model_names <- c(linear = "Linear", mono = "Mono-exponential",
+                     bi = "Bi-exponential", `mono + drift` = "Mono-exp. + drift")
+
+# ---------------------------------------------------------------
+# Function: by how much is the model above (+) or below (-) the real HR?
+#   One small panel per model, values averaged in bins of bin_s seconds
+# ---------------------------------------------------------------
+r3h_plot_sign <- function(i, bin_s = 20, max_min = Inf) {
+  d <- r3h_res |>
+    filter(bout == i, t <= max_min * 60) |>
+    # mean residual in each time bin (removes beat-to-beat noise)
+    group_by(model, t = floor(t / bin_s) * bin_s + bin_s / 2) |>
+    summarise(resid = mean(resid), .groups = "drop") |>
+    # residual = real HR - model, so model - real HR = -residual
+    #   e.g. model 10 bpm above the real HR -> +10
+    mutate(error    = -resid,
+           position = if_else(error > 0, "Model above real HR", "Model below real HR"))
+
+  ggplot(d, aes(t / 60, error, fill = position)) +
+    geom_col(width = bin_s / 60) +                     # one bar per time bin
+    geom_hline(yintercept = 0) +
+    facet_wrap(~model, ncol = 1, labeller = as_labeller(r3h_model_names)) +
+    scale_fill_manual(values = c("Model above real HR" = "firebrick",
+                                 "Model below real HR" = "steelblue")) +
+    labs(x = "Time since end of exercise (min)",
+         y = "Model − real HR (bpm)", fill = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "bottom",
+          strip.text = element_text(face = "bold"),
+          panel.grid.minor = element_blank())
+}
+
+# ---------------------------------------------------------------
+# Function: HR + fitted models (top) and sign panels (bottom)
+# ---------------------------------------------------------------
+r3h_plot_fit_sign <- function(i, bin_s = 20, max_min = Inf) {
+  top    <- r3h_plot_recovery(i, max_min) + labs(x = NULL)
+  bottom <- r3h_plot_sign(i, bin_s, max_min)
+  patchwork::wrap_plots(top, bottom, ncol = 1, heights = c(1.5, 3))   # bottom = 2x taller
+}
+```
+
+
+```{r}
+#| label: fig-r3h-res1
+#| fig-cap: "Recovery 1. Top: heart rate and fitted models. Bottom: for each model, +1 when the model is above the real heart rate and -1 when it is below (20-s bins). Long blocks of the same sign indicate a systematic error."
+#| fig-height: 10
+
+r3h_plot_fit_sign(1, bin_s = 20)
+```
+
+```{r}
+#| label: fig-r3h-res2
+#| fig-cap: "Recovery 2. Top: heart rate and fitted models. Bottom: sign of the model error for each model (30-s bins)."
+#| fig-height: 7
+
+r3h_plot_fit_sign(2, bin_s = 30)
+```
+
+```{r}
+#| label: fig-r3h-res3
+#| fig-cap: "Recovery 3. Top: heart rate and fitted models. Bottom: sign of the model error for each model (2-min bins)."
+#| fig-height: 8
+
+r3h_plot_fit_sign(3, bin_s = 120)
+```
+```{r}
+#| label: fig-r3h-res3-zoom
+#| fig-cap: "First 20 min of recovery 3. Top: heart rate and fitted models. Bottom: sign of the model error for each model (20-s bins)."
+#| fig-height: 8
+
+r3h_plot_fit_sign(3, bin_s = 20, max_min = 20)
+```
+```{r}
+#| label: r3h-summary
+
+# ---------------------------------------------------------------
+# 5e. Final summary: how far is each model from the real HR, on average?
+# ---------------------------------------------------------------
+r3h_summary <- r3h_res |>
+  mutate(model = as.character(model)) |>
+  group_by(bout, label, model) |>
+  summarise(
+    mean_error = mean(-resid),          # signed mean (≈ 0: errors cancel out)
+    MAE        = mean(abs(resid)),      # mean absolute error (bpm)
+    RMSE       = sqrt(mean(resid^2)),   # penalises large errors more
+    .groups = "drop"
+  ) |>
+  # add the number of parameters and ΔAIC from the comparison table
+  left_join(select(r3h_ind, label, model, k, dAIC), by = c("label", "model")) |>
+  # best model of each recovery = lowest AIC (ΔAIC = 0)
+  mutate(best = if_else(dAIC == 0, "best (AIC)", ""),
+         model = factor(model, levels = c("linear", "mono", "bi", "mono + drift"))) |>
+  arrange(bout, model)
+
+r3h_summary |>
+  select(label, model, k, mean_error, MAE, RMSE, dAIC, best) |>
+  knitr::kable(digits = 2,
+               col.names = c("Recovery", "Model", "Parameters", "Mean error (bpm)",
+                             "MAE (bpm)", "RMSE (bpm)", "ΔAIC", ""),
+               caption = "Summary of model performance for each recovery period")
+```
+```{r}
+#| label: fig-r3h-summary
+#| fig-cap: "Mean absolute error (MAE) of each model for each recovery period. The best model according to AIC is marked with a star."
+#| fig-height: 4
+
+ggplot(r3h_summary, aes(model, MAE, fill = model)) +
+  geom_col() +
+  # star above the best model (lowest AIC)
+  geom_text(data = filter(r3h_summary, best != ""),
+            aes(label = "best"), vjust = -0.3, size = 4) +
+  facet_wrap(~label, nrow = 1) +
+  scale_fill_manual(values = r3h_model_colours4, labels = r3h_model_names) +
+  scale_x_discrete(labels = r3h_model_names) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +   # room for the star
+  labs(x = NULL, y = "Mean absolute error (bpm)", fill = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.text = element_text(face = "bold"))
+
+```
+
+We compared the models using goodness-of-fit indicators (MAE, RMSE, $R^2$), the
+Akaike and Bayesian information criteria (AIC, BIC), which penalise the number
+of parameters, and the structure of the residuals over time (@fig-r3h-res1 to
+@fig-r3h-res3-zoom). The signed mean error is zero for every model:
+least-squares fitting balances positive and negative errors, so this value
+cannot be used to compare models. We therefore used the mean absolute error
+(MAE), i.e. the average distance between the model and the real heart rate.
+The BIC gives the same ranking as the AIC for all recovery periods.
+
+**Recovery 1 (13–24 min).** The linear model is clearly rejected
+($\Delta AIC \approx 706$, $R^2 = 0.37$). Its residuals show a systematic
+pattern: it underestimates heart rate by about 13 bpm at the start of recovery,
+then overestimates it for several minutes (@fig-r3h-res1). The
+mono-exponential model reduces the MAE from 4.9 to 3.4 bpm, increases $R^2$ to
+0.65, and its errors alternate around zero. The mono-exponential + drift model
+has the lowest AIC, but its improvement is negligible in practice (MAE 3.31 vs
+3.35 bpm, same $R^2$). We therefore retain the mono-exponential model as the
+most parsimonious and interpretable description of this recovery
+($\tau \approx 91$ s). The bi-exponential model did not converge.
+
+**Recovery 2 (29–54 min).** All models perform similarly (MAE 5.3–5.6 bpm) and
+show the same residual pattern (@fig-r3h-res2). All models explain almost none
+of the heart rate variation during this period ($R^2 \le 0.06$). The
+mono-exponential model has the lowest AIC; the bi-exponential model, with two
+extra parameters, does not improve the fit ($\Delta AIC \approx 2$, identical
+MAE). The residual waves are not explained by any decay model: they follow the
+changes in movement during this active recovery. The mono-exponential + drift
+model did not converge.
+
+**Recovery 3 (55–190 min).** The linear and mono-exponential models both miss
+the fast decrease at the beginning of recovery: during the first 4 min, they
+underestimate heart rate by up to 10–15 bpm (@fig-r3h-res3-zoom). The
+bi-exponential and mono-exponential + drift models capture this fast phase and
+give the same MAE (6.45 bpm) and nearly the same $R^2$ (0.485 and 0.484). The
+bi-exponential model has the lowest AIC, but its slow component is not
+physiologically interpretable ($\tau_2 \approx 4.5$ h,
+$HR_\infty \approx 31$ bpm, see previous section). The mono-exponential + drift
+model reaches the same accuracy with one parameter less, which confirms that
+the "slow phase" of the bi-exponential model mainly describes a linear drift.
+
+**Limits of the statistical comparison.** For all models and all recovery
+periods, the residuals are strongly autocorrelated: the Durbin–Watson statistic
+ranges from 0.10 to 0.17 (far below the value of 2 expected for independent
+residuals), the lag-1 autocorrelation ranges from 0.91 to 0.95, and the
+Ljung–Box test is highly significant ($p \approx 0$). Beat-to-beat heart rate
+fluctuates with breathing and with changes in movement, which no smooth decay
+curve can capture. With thousands of correlated beats, the AIC differences
+overstate the evidence and should be read as indicative. The choice of model
+must therefore also rely on residual structure, parsimony and physiological
+interpretability.
+
+**In summary**, the post-exercise decrease in heart rate is well described by a
+mono-exponential decay with a time constant of about 1.5–3 min. On the long
+recovery, this fast phase is followed by a slow, almost linear drift over
+several hours, which reflects prolonged rest rather than a second exponential
+recovery process.
