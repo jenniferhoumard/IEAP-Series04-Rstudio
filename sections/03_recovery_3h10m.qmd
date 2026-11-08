@@ -339,6 +339,36 @@ For each recovery period, $t = 0$ is the end of the preceding exercise bout.
 
 ### Fitting the models
 
+We fitted three models to each recovery period separately, because each period
+has a different heart rate pattern:
+
+- **Linear:** $HR(t) = \beta_0 + \beta_1 t$
+- **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$
+- **Bi-exponential:** $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$
+
+where $HR_\infty$ is the plateau, $a$, $a_1$, $a_2$ the amplitudes of the
+decrease and $\tau$, $\tau_1$, $\tau_2$ the time constants. For each period,
+time is reset to zero at the end of the preceding exercise bout, so that $t$
+measures the time since the start of recovery.
+
+The linear model was fitted with `lm()` and the exponential models by
+non-linear least squares with `nls()`. Non-linear models need starting values:
+we used the mean heart rate during the first 30 s to estimate the initial heart
+rate and the median heart rate during the last 20 % of the period to estimate
+the plateau; their difference gives an initial estimate of the amplitude. We
+constrained amplitudes to be positive and time constants to be at least 1 s.
+
+The bi-exponential model has five parameters and is harder to fit. We therefore
+tried three sets of starting values (the first one based on the time constants
+reported by @joseph2023) and kept the converged fit with the smallest residual
+sum of squares, i.e. the smallest overall difference between predicted and
+measured heart rates.
+
+For each parameter, we report an approximate 95 % confidence interval
+(estimate ± 1.96 × standard error). These intervals are only approximate for
+non-linear models, and they are probably too narrow here because the
+beat-to-beat residuals are autocorrelated (see the model comparison).
+
 ```{r}
 #| label: r3h-fit
 
@@ -512,8 +542,6 @@ r3h_plot_recovery(3)
 
 r3h_plot_recovery(3, max_min = 20)
 ```
-
-We fitted the three models to each recovery period, with $t = 0$ at the end of the preceding exercise bout. Non-linear models were fitted by least squares with `nls()`. For the bi-exponential model, we tried several sets of starting values (the first one based on @joseph2023) and kept the best converged fit.
 
 **Recovery 1 (13–24 min, @fig-r3h-rec1).** The mono-exponential model gives a time constant $\tau \approx 91$ s (95 % CI: 82–99 s), an amplitude of about 27 bpm and a plateau of about 106 bpm. These parameters are precise and physiologically plausible. The linear model misses the fast decrease at the beginning of recovery. The bi-exponential model did not converge, which suggests that the data do not contain enough information to estimate two distinct time constants over this short period.
 
