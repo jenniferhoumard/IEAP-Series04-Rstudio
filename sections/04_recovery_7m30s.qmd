@@ -75,18 +75,23 @@ r7_rr <- r7_rr |>
   mutate(rel_change = abs(rr / lag(rr) - 1),   # relative change vs previous beat
          artefact = !is.na(rel_change) & rel_change > 0.20)
 
-r7_rr |>
+# Quality summary
+r7_quality <- r7_rr |>
   summarise(n_beats = n(),
             n_artefacts = sum(artefact),
             rr_min_ms = min(rr), rr_max_ms = max(rr),
-            hr_min_bpm = min(hr), hr_max_bpm = max(hr)) |>
-  knitr::kable(digits = 1, caption = "RR interval quality check")
+            hr_min_bpm = min(hr), hr_max_bpm = max(hr))
 
+knitr::kable(r7_quality, digits = 1, caption = "RR interval quality check")
+
+# Remove flagged intervals (if any)
 r7_rr <- filter(r7_rr, !artefact)
 ```
 
-No interval was rejected, so the RR series is clean. All RR values stay between
-368 and 520 ms (115–163 bpm), which is physiologically plausible.
+`r r7_quality$n_artefacts` interval(s) were rejected, so the RR series is
+clean. All RR values stay between `r r7_quality$rr_min_ms` and
+`r r7_quality$rr_max_ms` ms (`r round(r7_quality$hr_min_bpm)`–`r round(r7_quality$hr_max_bpm)`
+bpm), which is physiologically plausible.
 
 #### Identifying the exercise and recovery periods
 
@@ -357,8 +362,9 @@ imap(compact(r7_models), r7_param_table) |>
   - **Mono-exponential:** $\tau =$ `r round(coef(r7_models$mono)["tau"], 1)` s and
   $HR_\infty =$ `r round(coef(r7_models$mono)["hr_inf"], 1)` bpm. All
   parameters are precise and physiologically interpretable: HR tends towards
-  about 131 bpm, the level kept up by the active recovery.
-  - **Bi-exponential:** the fast component
+  about `r round(coef(r7_models$mono)["hr_inf"])` bpm, the level kept up by the
+  active recovery.
+- **Bi-exponential:** the fast component
   ($\tau_1 \approx$ `r round(coef(r7_models$bi)["tau1"], 1)` s) is plausible,
   but the slow component is **not**:
   $\tau_2 \approx$ `r round(coef(r7_models$bi)["tau2"])` s (more than 2 hours,
@@ -391,9 +397,11 @@ r7_drift <- nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = r7_rr,
 r7_param_table(r7_drift, "mono + drift") |>
   knitr::kable(digits = 3, caption = "Mono-exponential + linear drift")
 
-r7_indicators(c(compact(r7_models), list(`mono + drift` = r7_drift)), r7_rr) |>
-  knitr::kable(digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
-               caption = "Comparison including the mono-exponential + drift model")
+# Compare all four models with the same indicators
+r7_ind_all <- r7_indicators(c(compact(r7_models), list(`mono + drift` = r7_drift)), r7_rr)
+
+knitr::kable(r7_ind_all, digits = c(0, 0, 2, 3, 1, 1, 1, 2, 2, 3),
+             caption = "Comparison including the mono-exponential + drift model")
 ```
 
 The mono-exponential + drift reproduces the bi-exponential: same fast time
@@ -471,7 +479,8 @@ r7_res |>
 - **Bi-exponential / mono + drift:** the end-of-recording trend is partly
   absorbed, but slow waves remain (for example around 240–290 s, a period of
   movement).
-- **For all models**, residuals stay strongly autocorrelated (lag-1 ACF ≈ 0.7,
+- **For all models**, residuals stay strongly autocorrelated (lag-1 ACF between
+  `r round(min(r7_ind_all$acf_lag1), 2)` and `r round(max(r7_ind_all$acf_lag1), 2)`,
   Durbin-Watson ≪ 2, Ljung-Box p ≈ 0). Part of this comes from the physiology:
   beat-to-beat HR oscillates with breathing (respiratory sinus arrhythmia) and
   with changes in movement. No smooth decay curve can capture this. As a
@@ -514,31 +523,42 @@ r7_sens <- list(
 r7_sens_tab <- imap(r7_sens, \(d, name) {
   ms <- r7_fit_models(d)
   ind <- r7_indicators(ms, d)
+  tau <- coef(ms$mono)["tau"]
+  tau_se <- summary(ms$mono)$coefficients["tau", 2]
   tibble(dataset = name,
          n = nrow(d),
-         tau_mono = coef(ms$mono)["tau"],
-         tau_CI = paste0("[", paste(round(coef(ms$mono)["tau"] + c(-1.96, 1.96) *
-                          summary(ms$mono)$coefficients["tau", 2], 1), collapse = "; "), "]"),
-         hr_inf_mono = coef(ms$mono)["hr_inf"],
-         dAIC_linear = ind$dAIC[ind$model == "linear"] - ind$dAIC[ind$model == "mono"],
+         tau_mono = unname(tau),
+         tau_low = unname(tau - 1.96 * tau_se),
+         tau_high = unname(tau + 1.96 * tau_se),
+         hr_inf_mono = unname(coef(ms$mono)["hr_inf"]),
+         dAIC_linear = ind$AIC[ind$model == "linear"] - ind$AIC[ind$model == "mono"],
          bi_converged = !is.null(ms$bi),
-         tau2_bi = if (is.null(ms$bi)) NA_real_ else coef(ms$bi)["tau2"])
+         tau2_bi = if (is.null(ms$bi)) NA_real_ else unname(coef(ms$bi)["tau2"]))
 }) |>
   list_rbind()
 
 knitr::kable(r7_sens_tab, digits = 1,
-             col.names = c("Data", "n", "τ mono (s)", "95 % CI", "HR∞ mono (bpm)",
-                           "AIC linear − AIC mono", "Bi-exp converged?", "τ₂ bi-exp (s)"),
+             col.names = c("Data", "n", "τ mono (s)", "CI low", "CI high",
+                           "HR∞ mono (bpm)", "AIC linear − AIC mono",
+                           "Bi-exp converged?", "τ₂ bi-exp (s)"),
              caption = "Sensitivity of the results to the data and window used")
+
+# Shortcuts used in the text below
+r7_s_main <- r7_sens_tab[1, ]
+r7_s_act  <- r7_sens_tab[2, ]
+r7_tau_range_full <- range(r7_sens_tab$tau_mono[-2])   # all whole-recording fits
 ```
 
-- The **mono-exponential time constant is robust to the signal**: about
-  63–65 s on the whole recording, whether we use RR, pulse or 5-s bins. It
-  **does depend on the window**. On the active window only it is shorter
-  (≈ 49 s), close to the value obtained with the drift term (≈ 44 s). On the
-  whole recording, the end-of-movement drop pulls the curve down and makes the
-  exponential look slower than it is.
-- The mono-exponential always beats the linear model by a large AIC margin.
+- The **mono-exponential time constant is robust to the signal**: between
+  `r round(r7_tau_range_full[1])` and `r round(r7_tau_range_full[2])` s on the
+  whole recording, whether we use RR, pulse or 5-s bins. It **does depend on
+  the window**. On the active window only it is shorter
+  (`r round(r7_s_act$tau_mono, 1)` s), close to the value obtained with the
+  drift term (`r round(coef(r7_drift)["tau"], 1)` s). On the whole recording,
+  the end-of-movement drop pulls the curve down and makes the exponential look
+  slower than it is.
+- The mono-exponential always beats the linear model by a large AIC margin
+  (at least `r round(min(r7_sens_tab$dAIC_linear))` AIC units).
 - When the activity is constant (0–330 s), **the bi-exponential cannot be
   fitted at all**: there is no second exponential phase to estimate. Whenever it
   does converge, its slow component degenerates into a linear drift
@@ -546,17 +566,22 @@ knitr::kable(r7_sens_tab, digits = 1,
   
 #### Summary of findings for this recording
 
-- The recording covers **recovery only**: exercise ended shortly before it
-  started. The recovery is **active** until ~330 s (participant moving), then
-  **passive**.
-- The **linear model** is clearly rejected: worst fit, systematic curvature in
-  the residuals, and no physiological meaning.
+- The recording covers **recovery only**: exercise ended before the recording
+  started, at an unknown time. The recovery is **active** until ~330 s
+  (participant moving), then **passive**.
+- The **linear model** is clearly rejected: worst fit
+  (R² = `r round(r7_ind$R2[r7_ind$model == "linear"], 2)`), systematic
+  curvature in the residuals, and no physiological meaning.
 - The **mono-exponential model** is the best compromise. With only 3
   parameters it explains most of the variance and gives an interpretable time
-  constant and a plateau (~131–133 bpm) that matches the HR kept up by ongoing
-  movement. Its best estimate is the one obtained on a window of constant
-  activity: **$\tau \approx 49$ s** (95 % CI ≈ 44–53 s, 0–330 s). On the whole
-  recording $\tau \approx 63$ s, which is biased upwards by the late drop.
+  constant and a plateau
+  (`r round(min(r7_s_act$hr_inf_mono, r7_s_main$hr_inf_mono))`–`r round(max(r7_s_act$hr_inf_mono, r7_s_main$hr_inf_mono))` bpm) that
+  matches the HR kept up by ongoing movement. Its best estimate is the one
+  obtained on a window of constant activity:
+  **$\tau \approx$ `r round(r7_s_act$tau_mono)` s** (95 % CI
+  `r round(r7_s_act$tau_low)`–`r round(r7_s_act$tau_high)` s, 0–330 s). On the
+  whole recording $\tau \approx$ `r round(r7_s_main$tau_mono)` s, which is
+  biased upwards by the late drop.
 - The **mono-exponential + linear drift** has the lowest AIC/BIC on the whole
   recording, but its drift term is purely empirical: a straight line cannot
   continue forever. It is useful to show that the bi-exponential's "slow
@@ -565,7 +590,7 @@ knitr::kable(r7_sens_tab, digits = 1,
   statistics come from a slow component that is mathematically a straight line
   and physiologically meaningless ($\tau_2$ > 2 h). It cannot be fitted when the
   activity is constant. A 7.5-min recording is too short to identify a true slow
-  recovery phase, which would need tens of minutes of data.
+  recovery phase.
 - The **remaining structure** in the residuals (late drop, mid-recording wave,
   autocorrelation) comes from **changes in physical activity and breathing**,
   not from the decay law itself. Any HRR model applied to this recording should
