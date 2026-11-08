@@ -593,9 +593,26 @@ knitr::kable(r3h_ind, digits = c(0, 0, 0, 2, 3, 0, 0, 0, 2, 2, 3),
              caption = "Model comparison for each recovery period")
 ```
 ```{r}
+#| label: r3h-residuals-prep
 # Nice names for the models (used as panel titles)
 r3h_model_names <- c(linear = "Linear", mono = "Mono-exponential",
                      bi = "Bi-exponential", `mono + drift` = "Mono-exp. + drift")
+
+# ---------------------------------------------------------------
+# 5c. Residuals of every model, for every recovery
+# ---------------------------------------------------------------
+r3h_res <- r3h_rec |>
+  mutate(res = map2(models, data, \(ms, d)
+                    imap(compact(ms), \(m, name)
+                         tibble(model = name, t = d$t, resid = resid(m))) |>
+                      list_rbind())) |>
+  select(bout, label, res) |>
+  unnest(res) |>
+  mutate(model = factor(model, levels = c("linear", "mono", "bi", "mono + drift")))
+
+# Colours: same as the fit figures + one for the 4th model
+r3h_model_colours4 <- c(r3h_model_colours, `mono + drift` = "#e7298a")
+
 
 # ---------------------------------------------------------------
 # Function: by how much is the model above (+) or below (-) the real HR?
