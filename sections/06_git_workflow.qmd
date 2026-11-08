@@ -38,3 +38,7 @@ The sections depend on each other: the recording analyses (03, 04) cite the refe
 ## Commit messages
 
 Each commit does one step of a question, and its message describes this step in the imperative: `Import recovery signals for analysis`, `Check RR artefacts and recording gaps`, `Add mono-exponential drift recovery model`, `Proposed a better numerical experiment`. Each question has several commits (between 2 and more than 30 per branch), so the history shows how each analysis was built.
+
+## What went wrong and what we learned
+
+-   **Commits directly on `main`.** Two small fixes were committed directly on `main` after the setup (`Removed html format`, `Add quarto yml file`). The second one was needed because Quarto executed the code of each section from the `sections/` folder, so the relative paths to `data/` failed. Adding a `_quarto.yml` with `execute-dir: project` solved it for everyone. In hindsight, these fixes should also have gone through a short branch and a pull request.
