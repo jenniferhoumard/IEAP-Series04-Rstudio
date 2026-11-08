@@ -679,7 +679,7 @@ r3h_plot_fit_sign <- function(i, bin_s = 20, max_min = Inf) {
 
 ```{r}
 #| label: fig-r3h-res1
-#| fig-cap: "Recovery 1. Top: heart rate and fitted models. Bottom: for each model, +1 when the model is above the real heart rate and -1 when it is below (20-s bins). Long blocks of the same sign indicate a systematic error."
+#| fig-cap: "Recovery 1. Top: heart rate and fitted models. Bottom: for each model, difference between the model and the real heart rate (bpm, 20-s bins); positive = model above the real heart rate. Long blocks of the same sign indicate a systematic error."
 #| fig-height: 10
 
 r3h_plot_fit_sign(1, bin_s = 20)
@@ -687,7 +687,7 @@ r3h_plot_fit_sign(1, bin_s = 20)
 
 ```{r}
 #| label: fig-r3h-res2
-#| fig-cap: "Recovery 2. Top: heart rate and fitted models. Bottom: sign of the model error for each model (30-s bins)."
+#| fig-cap: "Recovery 2. Top: heart rate and fitted models. Bottom: difference between the model and the real heart rate for each model (bpm) (30-s bins)."
 #| fig-height: 7
 
 r3h_plot_fit_sign(2, bin_s = 30)
@@ -695,14 +695,14 @@ r3h_plot_fit_sign(2, bin_s = 30)
 
 ```{r}
 #| label: fig-r3h-res3
-#| fig-cap: "Recovery 3. Top: heart rate and fitted models. Bottom: sign of the model error for each model (2-min bins)."
+#| fig-cap: "Recovery 3. Top: heart rate and fitted models. Bottom: difference between the model and the real heart rate for each model (bpm) (2-min bins)."
 #| fig-height: 8
 
 r3h_plot_fit_sign(3, bin_s = 120)
 ```
 ```{r}
 #| label: fig-r3h-res3-zoom
-#| fig-cap: "First 20 min of recovery 3. Top: heart rate and fitted models. Bottom: sign of the model error for each model (20-s bins)."
+#| fig-cap: "First 20 min of recovery 3. Top: heart rate and fitted models. Bottom: difference between the model and the real heart rate for each model (bpm) (20-s bins)."
 #| fig-height: 8
 
 r3h_plot_fit_sign(3, bin_s = 20, max_min = 20)
@@ -738,7 +738,7 @@ r3h_summary |>
 ```
 ```{r}
 #| label: fig-r3h-summary
-#| fig-cap: "Mean absolute error (MAE) of each model for each recovery period. The best model according to AIC is marked with a star."
+#| fig-cap: "Mean absolute error (MAE) of each model for each recovery period. The best model according to AIC is labelled 'best'."
 #| fig-height: 4
 
 ggplot(r3h_summary, aes(model, MAE, fill = model)) +
@@ -749,7 +749,7 @@ ggplot(r3h_summary, aes(model, MAE, fill = model)) +
   facet_wrap(~label, nrow = 1) +
   scale_fill_manual(values = r3h_model_colours4, labels = r3h_model_names) +
   scale_x_discrete(labels = r3h_model_names) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +   # room for the star
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +   # room for the label
   labs(x = NULL, y = "Mean absolute error (bpm)", fill = NULL) +
   theme_minimal(base_size = 12) +
   theme(legend.position = "none",
