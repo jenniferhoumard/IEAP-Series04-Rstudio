@@ -42,3 +42,4 @@ Each commit does one step of a question, and its message describes this step in 
 ## What went wrong and what we learned
 
 -   **Commits directly on `main`.** Two small fixes were committed directly on `main` after the setup (`Removed html format`, `Add quarto yml file`). The second one was needed because Quarto executed the code of each section from the `sections/` folder, so the relative paths to `data/` failed. Adding a `_quarto.yml` with `execute-dir: project` solved it for everyone. In hindsight, these fixes should also have gone through a short branch and a pull request.
+-   **Working on an outdated branch.** Jennifer merged `main` into `04_recovery_7m30s` on GitHub to bring the `_quarto.yml` fix, but Alexis then committed on his local copy without pulling first. Git had to create an extra merge commit when he pushed. Running `git pull` before starting to work avoids this.
