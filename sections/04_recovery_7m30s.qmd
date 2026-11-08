@@ -264,6 +264,32 @@ r7_indicators <- function(models, d) {
 }
 ```
 
+To compare the models, we use two groups of indicators.
+
+**Goodness of fit and complexity:**
+
+- **RMSE** (root mean square error): the typical distance between the data and
+  the model, in bpm. Lower is better.
+- **R²**: the proportion of the HR variance explained by the model (0 to 1).
+  Higher is better, but it always increases when parameters are added.
+- **AIC** and **BIC** (Akaike and Bayesian information criteria): they reward a
+  good fit but **penalise the number of parameters** $k$, so a more complex
+  model is only preferred if it improves the fit enough. BIC penalises extra
+  parameters more strongly than AIC. Lower is better; **ΔAIC** is the
+  difference from the best model, and a ΔAIC above about 10 means that a model
+  is clearly worse.
+
+**Residual structure** (a good model leaves residuals that look like random
+noise, with no pattern over time):
+
+- **Durbin–Watson (DW)**: about 2 if successive residuals are independent;
+  values well below 2 mean that successive residuals are similar (positive
+  autocorrelation).
+- **Lag-1 autocorrelation**: the correlation between each residual and the next
+  one; close to 0 for independent residuals.
+- **Ljung–Box test**: tests whether the first 10 autocorrelations are all zero;
+  a small p-value means the residuals are not random.
+
 ```{r}
 #| label: r7-fit-full
 
@@ -298,6 +324,14 @@ ggplot(r7_rr, aes(t, hr)) +
 ```
 
 #### Fitted parameters
+
+A good fit is not enough: the parameters must also be **estimated reliably**
+and have a **physiological meaning**. For each parameter we report its
+standard error (SE) and an approximate 95 % confidence interval (estimate
+± 1.96 SE). A narrow interval means the data determine the parameter well; a
+very wide interval means the data cannot tell its value. This is especially
+important for the time constants ($\tau$, $\tau_1$, $\tau_2$) and the plateau
+$HR_\infty$, which are the parameters we want to interpret.
 
 ```{r}
 #| label: r7-params
