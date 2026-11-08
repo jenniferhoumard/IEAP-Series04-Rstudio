@@ -1,3 +1,9 @@
+---
+
+editor: 
+  markdown: 
+    wrap: 72
+---
 
 ## Three-hour cardio recording from effort to rest
 
@@ -109,16 +115,8 @@ tibble(
 ) |>
   knitr::kable(digits = 1, caption = "Signals used in the analysis (3h10m recording)")
 ```
-The four signals cover the whole recording (0 to 190 min, i.e. 3 h 10 min),
-so the data set is complete enough for the analysis. The 16 684 RR intervals
-over 190 min correspond to a mean heart rate of about 88 bpm, which is
-consistent with a heart rate falling from about 128 to 66 bpm, as described in
-the data set. The device pulse signal contains 2 456 values, i.e. about one
-value every 5 s, as expected. The acceleration was summarised into 190 windows
-of 60 s, i.e. one value per minute, which is enough to follow changes in
-physical activity over three hours. The body position signal is of limited use:
-192 of the 206 samples are labelled `unknown`, and only 14 samples indicate a
-lying position (prone, supine or on one side).
+
+The four signals cover the whole recording (0 to 190 min, i.e. 3 h 10 min), so the data set is complete enough for the analysis. The 16 684 RR intervals over 190 min correspond to a mean heart rate of about 88 bpm, which is consistent with a heart rate falling from about 128 to 66 bpm, as described in the data set. The device pulse signal contains 2 456 values, i.e. about one value every 5 s, as expected. The acceleration was summarised into 190 windows of 60 s, i.e. one value per minute, which is enough to follow changes in physical activity over three hours. The body position signal is of limited use: 192 of the 206 samples are labelled `unknown`, and only 14 samples indicate a lying position (prone, supine or on one side).
 
 ### Signal quality
 
@@ -183,16 +181,105 @@ r3h_rr <- filter(r3h_rr, !artefact)
 
 summary(r3h_rr$hr)
 ```
-No recording gap longer than 3 s was found in the RR series. The gaps reported
-in `dataset.json` (up to about 60 s) concern the raw ECG, respiration and
-acceleration signals, not the RR intervals, which cover the whole recording.
 
-Using the 20 % rule, 71 of the 16 684 RR intervals (0.4 %) were identified as
-artefacts and removed. This very low proportion shows that the RR series is of
-good quality. After cleaning, heart rate ranges from about 52 to 158 bpm
-(median 89 bpm), which is physiologically plausible. The maximum is higher than
-the 128 bpm mentioned in the data set description, which suggests that a
-period of higher effort occurs during the recording; this is examined in the
-next section.
+No recording gap longer than 3 s was found in the RR series. The gaps reported in `dataset.json` (up to about 60 s) concern the raw ECG, respiration and acceleration signals, not the RR intervals, which cover the whole recording.
 
+Using the 20 % rule, 71 of the 16 684 RR intervals (0.4 %) were identified as artefacts and removed. This very low proportion shows that the RR series is of good quality. After cleaning, heart rate ranges from about 52 to 158 bpm (median 89 bpm), which is physiologically plausible. The maximum is higher than the 128 bpm mentioned in the data set description, which suggests that a period of higher effort occurs during the recording; this is examined in the next section.
 
+### Identifying the exercise and recovery periods
+
+```{r}
+#| label: fig-r3h-overview
+#| fig-cap: "3h10m recording. Grey areas: exercise bouts (acceleration SD > 0.1 g). Blue areas: recovery periods following each bout. Top: beat-to-beat HR from RR intervals (grey points), device pulse (black) and 1-min mean HR (red); lying positions are marked at the top (blue ticks). Bottom: movement (SD of acceleration magnitude, 60-s windows); dashed line = 0.1 g threshold."
+#| fig-height: 6
+
+# ---------------------------------------------------------------
+# 3a. Detect the exercise bouts from the movement signal
+# ---------------------------------------------------------------
+r3h_acc_threshold <- 0.1   # g: above this, the minute is considered "active"
+
+r3h_bouts <- r3h_acc |>
+  filter(acc_sd > r3h_acc_threshold) |>          # keep only active minutes
+  # Active minutes less than 3 min apart belong to the same bout
+  # (so the two close peaks around 25 and 28 min form one bout)
+  mutate(bout = cumsum(t_min - lag(t_min, default = -Inf) > 3)) |>
+  group_by(bout) |>
+  summarise(start_min = min(t_min) - 0.5,         # beginning of the first active minute
+            end_min   = max(t_min) + 0.5,         # end of the last active minute
+            .groups = "drop")
+
+# ---------------------------------------------------------------
+# 3b. Recovery periods = from the end of a bout to the start of the next one
+#     (the last recovery lasts until the end of the recording)
+# ---------------------------------------------------------------
+r3h_recoveries <- r3h_bouts |>
+  transmute(bout,
+            start_min = end_min,
+            end_min   = lead(r3h_bouts$start_min, default = max(r3h_rr$t_min)))
+
+# Show both tables
+knitr::kable(r3h_bouts, digits = 1, caption = "Exercise bouts detected from movement")
+knitr::kable(r3h_recoveries, digits = 1, caption = "Recovery periods following each bout")
+
+# ---------------------------------------------------------------
+# 3c. Mean heart rate per minute + lying positions (as before)
+# ---------------------------------------------------------------
+r3h_hr_1min <- r3h_rr |>
+  group_by(t_min = floor(t_min) + 0.5) |>
+  summarise(hr = mean(hr), .groups = "drop")
+
+r3h_lying <- r3h_pos |>
+  filter(position != "unknown")
+
+# ---------------------------------------------------------------
+# 3d. Shaded areas, added to both panels
+#     (drawn first, so the data appear on top of them)
+# ---------------------------------------------------------------
+r3h_shading <- list(
+  geom_rect(data = r3h_recoveries, inherit.aes = FALSE,
+            aes(xmin = start_min, xmax = end_min, ymin = -Inf, ymax = Inf),
+            fill = "steelblue", alpha = 0.25),
+  geom_rect(data = r3h_bouts, inherit.aes = FALSE,
+            aes(xmin = start_min, xmax = end_min, ymin = -Inf, ymax = Inf),
+            fill = "grey40", alpha = 0.30)
+)
+
+# ---------------------------------------------------------------
+# 3e. Top panel: heart rate
+# ---------------------------------------------------------------
+r3h_p1 <- ggplot() +
+  r3h_shading +
+  geom_point(data = r3h_rr, aes(t_min, hr), colour = "grey70", size = 0.3) +
+  geom_line(data = r3h_pulse, aes(t_min, hr), linewidth = 0.4) +
+  geom_line(data = r3h_hr_1min, aes(t_min, hr), colour = "firebrick", linewidth = 0.8) +
+  geom_rug(data = r3h_lying, aes(x = t_min), sides = "t", colour = "steelblue") +
+  scale_x_continuous(breaks = seq(0, 190, by = 10)) +
+  labs(x = NULL, y = "Heart rate (bpm)") +
+  theme_minimal()
+
+# ---------------------------------------------------------------
+# 3f. Bottom panel: movement, with the threshold line
+# ---------------------------------------------------------------
+r3h_p2 <- ggplot(r3h_acc, aes(t_min, acc_sd)) +
+  r3h_shading +
+  geom_col(fill = "steelblue", width = 0.9) +
+  geom_hline(yintercept = r3h_acc_threshold, linetype = "dashed") +
+  scale_x_continuous(breaks = seq(0, 190, by = 10)) +
+  labs(x = "Time from start of recording (min)", y = "Acceleration SD (g)") +
+  theme_minimal()
+
+patchwork::wrap_plots(r3h_p1, r3h_p2, ncol = 1, heights = c(2, 1))
+```
+
+No activity labels are provided with the data set, so we identified the exercise bouts from the movement signal: a minute was considered active when the SD of the acceleration magnitude exceeded 0.1 g. Active minutes less than 3 min apart were grouped into the same bout. This threshold clearly separates the movement peaks from the rest of the recording.
+
+What we observe:
+
+- **Three exercise bouts** were detected: 10–13 min, 24–29 min (two close peaks) and 54–55 min. Each bout is followed by an increase in heart rate.
+- **0–10 min:** heart rate is already high (125–140 bpm), although movement stays below the threshold. The participant was probably exercising with little trunk movement (e.g. cycling), which a chest accelerometer does not detect well. We therefore consider that the first bout covers 0–13 min.
+- **Recovery 1 (13–24 min):** heart rate falls steadily from about 135 to 105 bpm, with little movement.
+- **Recovery 2 (29–54 min):** heart rate falls to about 100 bpm and then stays on a plateau, while light movement continues. This is an active recovery.
+- **Recovery 3 (55–190 min):** after the last bout, movement almost stops and heart rate decreases slowly from about 115 to 65 bpm over more than two hours, with short isolated peaks (possibly changes in body position).
+- The body position signal is mostly `unknown`; lying positions appear only sporadically and do not help to define the phases.
+
+For each recovery period, $t = 0$ is the end of the preceding exercise bout.
