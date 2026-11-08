@@ -24,7 +24,7 @@ format:
         \fvset{breaklines=true,breakanywhere=true}
         \usepackage{xurl}
         \emergencystretch=3em
-  gfm:
+  gfm: 
     toc: true
     number-sections: true
 execute:

@@ -569,7 +569,7 @@ r3h_plot_recovery(1)
 
 ```{r}
 #| label: fig-r3h-rec2
-#| fig-cap: " Recovery 2 (active recovery after the second exercise bout): linear, mono-exponential and bi-exponential fits. The mono-exponential + drift model did not converge.
+#| fig-cap: "Recovery 2: Linear, mono-exponential and bi-exponential model fits"
 #| fig-height: 4
 
 r3h_plot_recovery(2)
