@@ -1,23 +1,1139 @@
-
 ## Three-hour cardio recording from effort to rest
 
-### Test your predictions using the dataset
+### Data import and preparation
 
-<!--
-- Identify the exercise and recovery periods.
-- Extract and visualise heart rate as a function of time.
-- Identify the period corresponding to post-exercise recovery.
-- Fit appropriate mathematical models to the recovery data.
-- Compare the fitted models using appropriate statistical indicators
-  and residual analysis.
+We analyse a 3-hour-and-10-minute recording from an Aidlab chest strap (MIT
+licence) to identify the exercise and recovery periods, and to compare linear,
+mono-exponential and bi-exponential models of heart rate recovery.
 
-You will have to test:
+We use the RR intervals as our main signal because they provide one heart rate
+value per beat (about 16 700 values), whereas the device pulse signal provides
+one value about every 5 s (2 456 values). This allows us to follow heart rate
+changes in greater detail. Each RR interval is the time between two heartbeats
+in milliseconds; we convert it into heart rate in beats per minute with
+$HR = 60\,000 / RR$. The pulse signal is kept as an independent check.
 
-- A linear model.
-- A mono-exponential decay model.
-- A bi-exponential decay model, if justified by the data.
+We also use the acceleration to estimate movement, and the body position to
+examine posture. All timestamps are converted into time since the start of the
+recording, so that the signals can be compared.
 
-Do not select a model based on visual appearance alone.
-Consider goodness of fit, residual structure, model complexity
-and physiological interpretability.
--->
+To summarise movement, we compute the standard deviation of the acceleration
+magnitude in 60-s windows. Section 04 uses 10-s windows for its much shorter
+7-min-30-s recording; over three hours, longer windows make the overall
+movement patterns easier to see, although they may hide very brief movements.
+
+```{r}
+#| label: r3h-import
+library(tidyverse)
+
+# ---------------------------------------------------------------
+# 1. Location of the data and start time of the recording
+# ---------------------------------------------------------------
+
+# Folder where the unzipped files are stored
+r3h_dir <- "data/cardio-recovery-3h10m"
+
+# dataset.json contains the metadata (title, start/end time, signals...)
+r3h_meta <- jsonlite::read_json(file.path(r3h_dir, "dataset.json"))
+
+# Start of the recording, in Unix milliseconds.
+# We use it as the time origin: every timestamp will be expressed
+# relative to this moment.
+r3h_t0 <- r3h_meta$from_timestamp_ms
+
+
+# ---------------------------------------------------------------
+# 2. Beat-to-beat heart rate from RR intervals (main signal)
+# ---------------------------------------------------------------
+
+r3h_rr <- read_csv(file.path(r3h_dir, "rr.csv"),
+                   show_col_types = FALSE) |>   # hide the column message
+  mutate(
+    # timestamp is in ms since 1970 -> subtract the start and
+    # divide by 1000 to get seconds since the start of the recording
+    t     = (timestamp - r3h_t0) / 1000,
+    # same time in minutes (easier to read on 3-hour plots)
+    t_min = t / 60,
+    # "value" = time between two heartbeats, in milliseconds
+    rr    = value,
+    # heart rate in bpm: 60 000 ms in one minute / duration of one beat
+    hr    = 60000 / rr
+  )
+
+
+# ---------------------------------------------------------------
+# 3. Heart rate computed by the device ("pulse", ~1 value / 5 s)
+#    -> used only as an independent check of the RR-based HR
+# ---------------------------------------------------------------
+
+r3h_pulse <- read_csv(file.path(r3h_dir, "pulse.csv"),
+                      show_col_types = FALSE) |>
+  mutate(
+    t     = (timestamp - r3h_t0) / 1000,   # seconds from start
+    t_min = t / 60,                        # minutes from start
+    hr    = value                          # already in bpm
+  )
+
+
+# ---------------------------------------------------------------
+# 4. Movement from the accelerometer
+# ---------------------------------------------------------------
+# The accelerometer gives x, y, z (in g) many times per second.
+# 1) We combine the 3 axes into one magnitude: sqrt(x^2 + y^2 + z^2)
+# 2) We compute its standard deviation (SD) in 60-s windows:
+#    - SD close to 0  -> the person is still
+#    - larger SD      -> the person is moving
+
+r3h_acc <- read_csv(file.path(r3h_dir, "acceleration.csv"),
+                    show_col_types = FALSE) |>   # big file: takes a few seconds
+  mutate(
+    t   = (timestamp - r3h_t0) / 1000,     # seconds from start
+    mag = sqrt(x^2 + y^2 + z^2)            # magnitude of acceleration
+  ) |>
+  # floor(t / 60) * 60 = start of the 60-s window the sample belongs to
+  # + 30           = middle of the window (better for plotting)
+  group_by(t = floor(t / 60) * 60 + 30) |>
+  summarise(acc_sd = sd(mag),              # movement indicator per window
+            .groups = "drop") |>
+  mutate(t_min = t / 60)                   # minutes from start
+
+
+# ---------------------------------------------------------------
+# 5. Body position (code + text label)
+# ---------------------------------------------------------------
+
+r3h_pos <- read_csv(file.path(r3h_dir, "body-position.csv"),
+                    show_col_types = FALSE) |>
+  mutate(t     = (timestamp - r3h_t0) / 1000,
+         t_min = t / 60)
+
+# Look at the column names (we don't know them in advance)
+names(r3h_pos)
+
+# Count how many times each position code/label appears
+# (across(-c(timestamp, t, t_min)) = all columns except the time ones)
+r3h_pos |>
+  count(across(-c(timestamp, t, t_min)))
+
+
+# ---------------------------------------------------------------
+# 6. Summary table: how many points and which time span per signal
+# ---------------------------------------------------------------
+
+tibble(
+  signal      = c("RR intervals", "pulse", "acceleration (60-s windows)", "body position"),
+  n           = c(nrow(r3h_rr), nrow(r3h_pulse), nrow(r3h_acc), nrow(r3h_pos)),
+  t_start_min = c(min(r3h_rr$t_min), min(r3h_pulse$t_min), min(r3h_acc$t_min), min(r3h_pos$t_min)),
+  t_end_min   = c(max(r3h_rr$t_min), max(r3h_pulse$t_min), max(r3h_acc$t_min), max(r3h_pos$t_min))
+) |>
+  knitr::kable(digits = 1, caption = "Signals used in the analysis (3h10m recording)")
+```
+
+The four signals cover the whole recording (0 to 190 min, i.e. 3 h 10 min), so the data set is complete enough for the analysis. The 16 684 RR intervals over 190 min correspond to a mean heart rate of about 88 bpm, which is consistent with a heart rate falling from about 128 to 66 bpm, as described in the data set. The device pulse signal contains 2 456 values, i.e. about one value every 5 s, as expected. The acceleration was summarised into 190 windows of 60 s, i.e. one value per minute, which is enough to follow changes in physical activity over three hours. The body position signal is of limited use: 192 of the 206 samples are labelled `unknown`, and only 14 samples indicate a lying position (prone, supine or on one side).
+
+### Signal quality
+
+Before fitting the models, we check the quality of the RR intervals to identify
+measurement errors that could affect the results. We first look for recording
+gaps, i.e. moments when two consecutive beats are more than 3 s apart, which
+means that the device stopped recording. We then look for artefacts, i.e. RR
+intervals that differ by more than 20 % from the previous one, which usually
+indicate a missed or an extra beat detection. Gaps are detected before removing
+the artefacts, because removing beats would otherwise create artificial gaps.
+Following the data set documentation, gaps are only located and are not filled
+in; artefacts are removed.
+
+```{r}
+#| label: r3h-quality
+
+# ---------------------------------------------------------------
+# 2a. Recording gaps
+# ---------------------------------------------------------------
+# Normally, two consecutive beats are less than 1-2 s apart.
+# If the time between two beats is much longer (here > 3 s),
+# the device stopped recording: this is a gap, not a real beat.
+# The README says gaps are preserved and not filled in,
+# so we only locate them; we do NOT fill them.
+
+r3h_gaps <- r3h_rr |>
+  mutate(dt = t - lag(t)) |>              # time since the previous beat (s)
+  filter(dt > 3) |>                       # keep only abnormal intervals
+  transmute(
+    gap_start_min = (t - dt) / 60,        # last beat before the gap (min)
+    gap_end_min   = t_min,                # first beat after the gap (min)
+    duration_s    = dt                    # length of the gap (s)
+  )
+
+# Table of all gaps
+r3h_gaps |>
+  knitr::kable(digits = 1,
+               caption = "Recording gaps in the RR series (> 3 s between beats)")
+
+# Overall summary of the gaps
+r3h_gaps |>
+  summarise(n_gaps         = n(),
+            total_gap_min  = sum(duration_s) / 60,
+            longest_gap_s  = if (n() == 0) 0 else max(duration_s)) |>
+  knitr::kable(digits = 1, caption = "Summary of recording gaps")
+
+# ---------------------------------------------------------------
+# 2b. RR artefacts (missed or extra beats)
+# ---------------------------------------------------------------
+# A common rule: an RR interval is an artefact if it differs by more
+# than 20 % from the previous one (a real heart cannot change that
+# fast from one beat to the next).
+
+r3h_rr <- r3h_rr |>
+  mutate(
+    rel_change = abs(rr / lag(rr) - 1),   # relative change vs previous beat
+    artefact   = !is.na(rel_change) &     # first beat has no previous one
+                 rel_change > 0.20        # TRUE if change > 20 %
+  )
+
+# Quality table: before removing anything
+r3h_rr |>
+  summarise(n_beats     = n(),
+            n_artefacts = sum(artefact),
+            pct_artefacts = 100 * mean(artefact),
+            rr_min_ms   = min(rr),  rr_max_ms  = max(rr),
+            hr_min_bpm  = min(hr),  hr_max_bpm = max(hr)) |>
+  knitr::kable(digits = 1, caption = "RR interval quality check")
+
+# Remove the artefacts: from now on, r3h_rr only contains clean beats
+r3h_rr <- filter(r3h_rr, !artefact)
+
+summary(r3h_rr$hr)
+```
+
+No recording gap longer than 3 s was found in the RR series. The gaps reported in `dataset.json` (up to about 60 s) concern the raw ECG, respiration and acceleration signals, not the RR intervals, which cover the whole recording.
+
+Using the 20 % rule, 71 of the 16 684 RR intervals (0.4 %) were identified as artefacts and removed. This very low proportion shows that the RR series is of good quality. After cleaning, heart rate ranges from about 52 to 158 bpm (median 89 bpm), which is physiologically plausible. The maximum is higher than the 128 bpm mentioned in the data set description, which suggests that a period of higher effort occurs during the recording; this is examined in the next section.
+
+### Identifying the exercise and recovery periods
+
+The data set does not provide any activity labels, so we used the acceleration
+signal to estimate when the participant was exercising and when they were
+recovering.
+
+**Exercise bouts.** We define an exercise bout as a period of increased
+movement. A minute is considered active when the standard deviation (SD) of the
+acceleration magnitude exceeds 0.1 g. We chose this threshold by inspecting the
+movement signal: the SD is very low during most of the recording (median
+0.013 g; 75 % of the minutes below 0.035 g), whereas only 8 minutes exceed
+0.1 g, with values from 0.10 to 0.71 g. A threshold of 0.1 g therefore separates
+these movement peaks from the rest of the recording. A higher threshold would
+miss part of the activity: with 0.2 g, the third bout (0.197 g at 54.5 min) would
+not be detected at all. This threshold is an estimate: an active minute does
+not guarantee that the participant was exercising, and exercise with little
+trunk movement may not be detected.
+
+**Grouping active minutes.** Active minutes separated by no more than 3 min are
+grouped into the same bout. This allows short breaks within an exercise period
+without treating them as separate activities; for example, the two close
+movement peaks around 25 and 28 min form a single bout. The time between the end
+of a bout and the start of the next one is considered a recovery period.
+
+**Figure details.** Because there are many heart rate values per minute, we
+also compute the mean heart rate for each minute (red line) to make the overall
+trend easier to see. Each mean is plotted at the middle of its one-minute
+window: for example, the beats recorded between 10 and 11 min are plotted at
+10.5 min. The same convention is used for the 60-s acceleration windows. Finally,
+most body-position samples are labelled `unknown`, so we only plot the samples
+with a known lying position; they appear as small blue vertical marks at the top
+of the heart rate panel.
+
+```{r}
+#| label: fig-r3h-overview
+#| fig-cap: "3h10m recording. Grey areas: exercise bouts (acceleration SD > 0.1 g). Blue areas: recovery periods following each bout. Top: beat-to-beat HR from RR intervals (grey points), device pulse (black) and 1-min mean HR (red); lying positions are marked at the top (blue ticks). Bottom: movement (SD of acceleration magnitude, 60-s windows); dashed line = 0.1 g threshold."
+#| fig-height: 6
+
+# ---------------------------------------------------------------
+# 3a. Detect the exercise bouts from the movement signal
+# ---------------------------------------------------------------
+r3h_acc_threshold <- 0.1   # g: above this, the minute is considered "active"
+
+r3h_bouts <- r3h_acc |>
+  filter(acc_sd > r3h_acc_threshold) |>          # keep only active minutes
+  # Active minutes less than 3 min apart belong to the same bout
+  # (so the two close peaks around 25 and 28 min form one bout)
+  mutate(bout = cumsum(t_min - lag(t_min, default = -Inf) > 3)) |>
+  group_by(bout) |>
+  summarise(start_min = min(t_min) - 0.5,         # beginning of the first active minute
+            end_min   = max(t_min) + 0.5,         # end of the last active minute
+            .groups = "drop")
+
+# ---------------------------------------------------------------
+# 3b. Recovery periods = from the end of a bout to the start of the next one
+#     (the last recovery lasts until the end of the recording)
+# ---------------------------------------------------------------
+r3h_recoveries <- r3h_bouts |>
+  transmute(bout,
+            start_min = end_min,
+            end_min   = lead(r3h_bouts$start_min, default = max(r3h_rr$t_min)))
+
+# Show both tables
+knitr::kable(r3h_bouts, digits = 1, caption = "Exercise bouts detected from movement")
+knitr::kable(r3h_recoveries, digits = 1, caption = "Recovery periods following each bout")
+
+# ---------------------------------------------------------------
+# 3c. Mean heart rate per minute + lying positions (as before)
+# ---------------------------------------------------------------
+r3h_hr_1min <- r3h_rr |>
+  group_by(t_min = floor(t_min) + 0.5) |>
+  summarise(hr = mean(hr), .groups = "drop")
+
+r3h_lying <- r3h_pos |>
+  filter(position != "unknown")
+
+# ---------------------------------------------------------------
+# 3d. Shaded areas, added to both panels
+#     (drawn first, so the data appear on top of them)
+# ---------------------------------------------------------------
+r3h_shading <- list(
+  geom_rect(data = r3h_recoveries, inherit.aes = FALSE,
+            aes(xmin = start_min, xmax = end_min, ymin = -Inf, ymax = Inf),
+            fill = "steelblue", alpha = 0.25),
+  geom_rect(data = r3h_bouts, inherit.aes = FALSE,
+            aes(xmin = start_min, xmax = end_min, ymin = -Inf, ymax = Inf),
+            fill = "grey40", alpha = 0.30)
+)
+
+# ---------------------------------------------------------------
+# 3e. Top panel: heart rate
+# ---------------------------------------------------------------
+r3h_p1 <- ggplot() +
+  r3h_shading +
+  geom_point(data = r3h_rr, aes(t_min, hr), colour = "grey70", size = 0.3) +
+  geom_line(data = r3h_pulse, aes(t_min, hr), linewidth = 0.4) +
+  geom_line(data = r3h_hr_1min, aes(t_min, hr), colour = "firebrick", linewidth = 0.8) +
+  geom_rug(data = r3h_lying, aes(x = t_min), sides = "t", colour = "steelblue") +
+  scale_x_continuous(breaks = seq(0, 190, by = 10)) +
+  labs(x = NULL, y = "Heart rate (bpm)") +
+  theme_minimal()
+
+# ---------------------------------------------------------------
+# 3f. Bottom panel: movement, with the threshold line
+# ---------------------------------------------------------------
+r3h_p2 <- ggplot(r3h_acc, aes(t_min, acc_sd)) +
+  r3h_shading +
+  geom_col(fill = "steelblue", width = 0.9) +
+  geom_hline(yintercept = r3h_acc_threshold, linetype = "dashed") +
+  scale_x_continuous(breaks = seq(0, 190, by = 10)) +
+  labs(x = "Time from start of recording (min)", y = "Acceleration SD (g)") +
+  theme_minimal()
+
+patchwork::wrap_plots(r3h_p1, r3h_p2, ncol = 1, heights = c(2, 1))
+```
+
+What we observe:
+
+- **Three exercise bouts** were detected: 10–13 min, 24–29 min (two close peaks) and 54–55 min. Each bout is followed by an increase in heart rate.
+- **0–10 min:** heart rate is already high (125–140 bpm), although movement stays below the threshold. The participant was probably exercising with little trunk movement, which a
+chest accelerometer does not detect well. We therefore consider that the first bout covers 0–13 min.
+- **Recovery 1 (13–24 min):** heart rate falls steadily from about 135 to 105 bpm, with little movement.
+- **Recovery 2 (29–54 min):** heart rate falls to about 100 bpm and then stays on a plateau, while light movement continues. This is an active recovery.
+- **Recovery 3 (55–190 min):** after the last bout, movement almost stops and heart rate decreases slowly from about 115 to 65 bpm over more than two hours, with short isolated peaks (possibly changes in body position).
+- The body position signal is mostly `unknown`; lying positions appear only sporadically and do not help to define the phases.
+
+For each recovery period, $t = 0$ is the end of the preceding exercise bout.
+
+### Fitting the models
+
+We fitted four models to each recovery period separately, because each period
+has a different heart rate pattern:
+
+- **Linear:** $HR(t) = \beta_0 + \beta_1 t$
+- **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$
+- **Bi-exponential:** $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$
+- **Mono-exponential + linear drift:** $HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$
+
+where $HR_\infty$ is the plateau, $a$, $a_1$, $a_2$ the amplitudes of the
+decrease and $\tau$, $\tau_1$, $\tau_2$ the time constants. For each period,
+time is reset to zero at the end of the preceding exercise bout, so that $t$
+measures the time since the start of recovery.
+
+The linear model was fitted with `lm()` and the exponential models by
+non-linear least squares with `nls()`. Non-linear models need starting values:
+we used the mean heart rate during the first 30 s to estimate the initial heart
+rate and the median heart rate during the last 20 % of the period to estimate
+the plateau; their difference gives an initial estimate of the amplitude. We
+constrained amplitudes to be positive and time constants to be at least 1 s.
+
+The bi-exponential model has five parameters and is harder to fit. We therefore
+tried three sets of starting values (the first one based on the time constants
+reported by @joseph2023) and kept the converged fit with the smallest residual
+sum of squares, i.e. the smallest overall difference between predicted and
+measured heart rates.
+
+For each parameter, we report an approximate 95 % confidence interval
+(estimate ± 1.96 × standard error). These intervals are only approximate for
+non-linear models, and they are probably too narrow here because the
+beat-to-beat residuals are autocorrelated (see the model comparison).
+
+The fourth model was added because recovery 3 shows a fast initial decrease
+followed by a slow, almost linear decline over several hours. The
+bi-exponential model can follow this pattern, but its slow component gives
+unrealistic parameter estimates (see below). Adding a linear drift term
+describes this slow decrease without assuming that it is a second exponential
+recovery process. We can then check whether this simpler model, with one
+parameter less, fits the data as well as the bi-exponential model. The same
+approach was used for the 7.5-min recording (Section 04).
+
+```{r}
+#| label: r3h-fit
+
+# ---------------------------------------------------------------
+# 4a. Extract one recovery period and reset time to 0
+# ---------------------------------------------------------------
+# start_min / end_min come from the r3h_recoveries table (step 3).
+# t becomes the time (s) since the END of the preceding exercise bout.
+r3h_get_recovery <- function(start_min, end_min) {
+  r3h_rr |>
+    filter(t_min >= start_min, t_min <= end_min) |>   # keep this period only
+    mutate(t = t - start_min * 60) |>                  # t = 0 at end of exercise
+    select(t, hr)
+}
+
+# ---------------------------------------------------------------
+# 4b. Fit the 3 models to one recovery period
+# ---------------------------------------------------------------
+r3h_fit_models <- function(d) {
+
+  # Starting values estimated from the data themselves:
+  hr_start <- mean(d$hr[d$t < 30])                    # mean HR in the first 30 s
+  hr_end   <- median(d$hr[d$t > 0.8 * max(d$t)])      # median HR in the last 20 %
+  amp      <- max(hr_start - hr_end, 1)               # size of the HR drop (bpm)
+
+  # --- Linear model: HR = b0 + b1 * t
+  linear <- lm(hr ~ t, data = d)
+
+  # --- Mono-exponential: HR = hr_inf + a * exp(-t / tau)
+  #     hr_inf = plateau, a = amplitude, tau = time constant (s)
+  #     "port" algorithm allows bounds (a >= 0, tau >= 1 s)
+  mono <- tryCatch(
+    nls(hr ~ hr_inf + a * exp(-t / tau), data = d,
+        start = list(hr_inf = hr_end, a = amp, tau = 60),
+        algorithm = "port",
+        lower = c(0, 0, 1), upper = c(200, 200, 1e5),
+        control = list(maxiter = 500)),
+    error = function(e) NULL)                          # NULL if it fails
+
+  # --- Bi-exponential: HR = hr_inf + a1*exp(-t/tau1) + a2*exp(-t/tau2)
+  #     Very sensitive to starting values -> we try several
+  #     (first one inspired by Joseph et al. 2023: tau1 ~ 44 s, tau2 ~ 120 s)
+  starts <- list(
+    list(hr_inf = hr_end,      a1 = 0.6 * amp, tau1 = 40, a2 = 0.4 * amp, tau2 = 120),
+    list(hr_inf = hr_end,      a1 = 0.5 * amp, tau1 = 60, a2 = 0.5 * amp, tau2 = 600),
+    list(hr_inf = hr_end - 10, a1 = 0.5 * amp, tau1 = 60, a2 = 0.5 * amp, tau2 = 3000)
+  )
+  bi_fits <- map(starts, \(s) tryCatch(
+    nls(hr ~ hr_inf + a1 * exp(-t / tau1) + a2 * exp(-t / tau2), data = d,
+        start = s, algorithm = "port",
+        lower = c(0, 0, 1, 0, 1), upper = c(200, 200, 1e4, 200, 1e5),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  bi_fits <- compact(bi_fits)                          # remove failed fits
+  # keep the fit with the smallest residual sum of squares (deviance)
+  bi <- if (length(bi_fits) == 0) NULL else bi_fits[[which.min(map_dbl(bi_fits, deviance))]]
+
+  list(linear = linear, mono = mono, bi = bi)
+}
+
+# ---------------------------------------------------------------
+# 4c. Apply to the 3 recovery periods
+# ---------------------------------------------------------------
+# One row per recovery; "data" and "models" are list-columns
+r3h_rec <- r3h_recoveries |>
+  mutate(
+    label  = paste0("Recovery ", bout, " (", start_min, "–", round(end_min), " min)"),
+    data   = map2(start_min, end_min, r3h_get_recovery),   # the beats of each period
+    models = map(data, r3h_fit_models)                     # the 3 fitted models
+  )
+
+# ---------------------------------------------------------------
+# 4d. Table of fitted parameters (estimate + standard error + 95 % CI)
+# ---------------------------------------------------------------
+r3h_param_table <- function(m, model_name) {
+  if (is.null(m)) return(NULL)                         # skip failed fits
+  s <- summary(m)$coefficients
+  tibble(model     = model_name,
+         parameter = rownames(s),
+         estimate  = s[, 1],
+         SE        = s[, 2],
+         CI_low    = s[, 1] - 1.96 * s[, 2],
+         CI_high   = s[, 1] + 1.96 * s[, 2])
+}
+
+r3h_rec |>
+  mutate(params = map(models, \(ms) imap(compact(ms), r3h_param_table) |> list_rbind())) |>
+  select(label, params) |>
+  unnest(params) |>
+  knitr::kable(digits = 2, caption = "Fitted parameters for each recovery period (time in s)")
+```
+```{r}
+#| label: r3h-fit-drift
+
+# ---------------------------------------------------------------
+# 4e. Fourth model: mono-exponential + linear drift
+#     HR = hr0 + a * exp(-t / tau) + b * t
+# ---------------------------------------------------------------
+r3h_fit_drift <- function(d) {
+  hr_start <- mean(d$hr[d$t < 30])
+  hr_end   <- median(d$hr[d$t > 0.8 * max(d$t)])
+  amp      <- max(hr_start - hr_end, 1)
+
+  # try several starting values for tau, keep the best converged fit
+  fits <- map(c(60, 120, 300), \(tau0) tryCatch(
+    nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = d,
+        start = list(hr0 = hr_end, a = amp, tau = tau0, b = 0),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  fits <- compact(fits)
+  if (length(fits) == 0) NULL else fits[[which.min(map_dbl(fits, deviance))]]
+}
+
+# Add this model to the list of models of each recovery
+r3h_rec <- r3h_rec |>
+  mutate(models = map2(models, data, \(ms, d)
+                       c(ms, list(`mono + drift` = r3h_fit_drift(d)))))
+
+# Parameters of the new model
+r3h_rec |>
+  mutate(params = map(models, \(ms) r3h_param_table(ms$`mono + drift`, "mono + drift"))) |>
+  select(label, params) |>
+  unnest(params) |>
+  knitr::kable(digits = 3,
+               caption = "Fitted parameters of the mono-exponential + linear drift model (time in s, b in bpm/s)")
+
+```
+
+```{r}
+#| label: r3h-plot-function
+
+# ---------------------------------------------------------------
+# Predicted curves and observed data (same as before)
+# ---------------------------------------------------------------
+r3h_pred <- r3h_rec |>
+  mutate(pred = map2(data, models, \(d, ms) {
+    grid <- tibble(t = seq(0, max(d$t), length.out = 500))
+    imap(compact(ms), \(m, name)
+         mutate(grid, model = name, hr = predict(m, newdata = grid))) |>
+      list_rbind()
+  })) |>
+  select(bout, pred) |>
+  unnest(pred)
+
+r3h_obs <- r3h_rec |>
+  select(bout, data) |>
+  unnest(data)
+
+r3h_model_colours <- c(linear = "#1b9e77", mono = "#7570b3", bi = "#d95f02")
+r3h_model_colours4 <- c(r3h_model_colours, `mono + drift` = "#e7298a")
+
+# ---------------------------------------------------------------
+# Function: plot one recovery period
+#   i       = number of the recovery (1, 2 or 3)
+#   max_min = optional: only show the first max_min minutes (zoom)
+# ---------------------------------------------------------------
+r3h_plot_recovery <- function(i, max_min = Inf) {
+  rec <- r3h_rec[r3h_rec$bout == i, ]                       # info on this recovery
+  obs <- filter(r3h_obs,  bout == i, t <= max_min * 60)     # its data
+  prd <- filter(r3h_pred, bout == i, t <= max_min * 60)     # its fitted curves
+
+  ggplot(obs, aes(t / 60, hr)) +
+    geom_point(colour = "grey60", size = 0.6, alpha = 0.4) +
+    geom_line(data = prd, aes(colour = model), linewidth = 1.1) +
+    scale_colour_manual(values = r3h_model_colours4,
+                        breaks = c("linear", "mono", "bi", "mono + drift"),
+                        labels = c("Linear", "Mono-exponential",
+                                   "Bi-exponential", "Mono-exp. + drift")) +
+    labs(title = paste0("Recovery ", i, " (",
+                        rec$start_min, "–", round(rec$end_min), " min of the recording)",
+                        # add ": first 20 min" only when we zoom
+                        if (is.finite(max_min)) paste0(": first ", max_min, " min") else ""),
+         x = "Time since end of exercise (min)", y = "Heart rate (bpm)",
+         colour = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "bottom",
+          plot.title = element_text(face = "bold"))
+}
+```
+
+```{r}
+#| label: fig-r3h-rec1
+#| fig-cap: "Recovery 1 (after the first exercise bout): linear, mono-exponential, bi-exponential and mono-exponential + drift fits"
+#| fig-height: 4
+
+r3h_plot_recovery(1)
+```
+
+```{r}
+#| label: fig-r3h-rec2
+#| fig-cap: " Recovery 2 (active recovery after the second exercise bout): linear, mono-exponential and bi-exponential fits. The mono-exponential + drift model did not converge.
+#| fig-height: 4
+
+r3h_plot_recovery(2)
+```
+
+```{r}
+#| label: fig-r3h-rec3
+#| fig-cap: "Recovery 3 (after the last exercise bout, until the end of the recording): linear, mono-exponential, bi-exponential and mono-exponential + drift fits"
+#| fig-height: 4
+
+r3h_plot_recovery(3)
+```
+
+```{r}
+#| label: fig-r3h-rec3-zoom
+#| fig-cap: "Zoom on the first 20 min of recovery 3 : linear, mono-exponential, bi-exponential and mono-exponential + drift fits"
+#| fig-height: 4
+
+r3h_plot_recovery(3, max_min = 20)
+```
+
+**Recovery 1 (13–24 min, @fig-r3h-rec1).** The mono-exponential model gives a time constant $\tau \approx 91$ s (95 % CI: 82–99 s), an amplitude of about 27 bpm and a plateau of about 106 bpm. These parameters are precise and physiologically plausible. The linear model misses the fast decrease at the beginning of recovery. The bi-exponential model did not converge, which suggests that the data do not contain enough information to estimate two distinct time constants over this short period.   The mono-exponential + drift model is almost identical to the mono-exponential model: its drift term adds very little over this short period.
+
+**Recovery 2 (29–54 min, @fig-r3h-rec2).** The decrease in heart rate is small (amplitude of about 11 bpm) and heart rate quickly stabilises around 99 bpm, consistent with the light movement that continues during this period (active recovery). The mono-exponential time constant ($\tau \approx 86$ s) is estimated with a wide confidence interval (58–115 s). The bi-exponential model converged but is not interpretable: its second time constant is shorter than the first one and the confidence interval of its amplitude includes negative values. The two exponential components cannot be separated. The mono-exponential + drift model did not converge.
+
+**Recovery 3 (55–190 min, @fig-r3h-rec3 and @fig-r3h-rec3-zoom).** This is the longest and calmest recovery period. Two processes are visible: a fast decrease in heart rate during the first minutes, then a very slow decrease over more than two hours.
+
+- The mono-exponential model only captures the slow decrease ($\tau \approx 4\,570$ s, i.e. about 76 min, plateau ≈ 64 bpm). It misses the fast initial drop: its curve starts at about 97 bpm, whereas the observed heart rate is about 112 bpm (@fig-r3h-rec3-zoom).
+- The bi-exponential model follows both phases. Its fast component ($\tau_1 \approx 174$ s, i.e. about 3 min; amplitude ≈ 21 bpm) describes the early recovery. However, its slow component is not physiologically interpretable: $\tau_2 \approx 16\,400$ s (about 4.5 h, longer than the recording itself) and the plateau ($HR_\infty \approx 31$ bpm) is far below any plausible resting heart rate. When $\tau_2$ is much longer than the observation window, $a_2 e^{-t/\tau_2}$ behaves like a straight line: the "slow phase" is in fact a linear drift of about 0.2 bpm/min. The same behaviour was observed on the 7.5-min recording. Accordingly, the mono-exponential + drift model gives a curve that is almost indistinguishable from the bi-exponential one (@fig-r3h-rec3-zoom).
+
+The time constants of the fast phase (91 s for recovery 1, 174 s for recovery 3) are of the same order of magnitude as those reported in the literature, although longer than the 44–65 s found by @joseph2023 after a maximal test with supine recovery. The intensity of exercise in our recording is unknown, and recovery took place without controlled posture, which may explain part of this difference. The models are compared quantitatively in the next section.
+
+
+### Model comparison and residual analysis
+
+We compare the fitted models to determine which one best describes heart rate
+recovery. We use several indicators, because a model can fit the data well but
+still be too complex or miss important patterns.
+
+**Goodness of fit.** We compute the mean absolute error (MAE, the average
+distance between the model and the measured heart rate), the root mean square
+error (RMSE, which gives more weight to large errors) and $R^2$ (the proportion
+of the heart rate variation explained by the model). Lower MAE and RMSE and
+higher $R^2$ indicate a better fit. The signed mean error is not used: it is
+always close to zero, because least-squares fitting balances positive and
+negative errors.
+
+**Complexity.** The Akaike and Bayesian information criteria (AIC, BIC) take
+into account both the fit and the number of parameters. Lower values are
+better: when two models fit the data similarly well, the simpler one is
+preferred. We report $\Delta AIC$, the difference from the best model of each
+recovery period.
+
+**Residuals.** The residuals are the differences between the measured and the
+predicted heart rate. A good model leaves residuals that are randomly scattered
+around zero. We examine them over time to detect systematic errors (long
+periods during which the model is always above or below the data). We also
+test whether consecutive residuals are independent, using the Durbin–Watson
+statistic (close to 2 for independent residuals), the lag-1 autocorrelation and
+the Ljung–Box test.
+
+```{r}
+#| label: r3h-compare
+# ---------------------------------------------------------------
+# 5b. Indicators of goodness of fit and residual structure
+# ---------------------------------------------------------------
+r3h_indicators <- function(models, d) {
+  imap(compact(models), \(m, name) {
+    e <- resid(m)                                       # residuals
+    tibble(
+      model      = name,
+      k          = length(coef(m)),                     # number of parameters
+      RMSE       = sqrt(mean(e^2)),                     # typical error (bpm)
+      R2         = 1 - sum(e^2) / sum((d$hr - mean(d$hr))^2),
+      AIC        = AIC(m),                              # lower = better
+      BIC        = BIC(m),                              # lower = better (penalises k more)
+      DW         = sum(diff(e)^2) / sum(e^2),           # Durbin-Watson: 2 = independent
+      acf_lag1   = acf(e, plot = FALSE)$acf[2],         # correlation with previous residual
+      LjungBox_p = Box.test(e, lag = 10, type = "Ljung-Box")$p.value
+    )
+  }) |>
+    list_rbind() |>
+    mutate(dAIC = AIC - min(AIC), .after = AIC)         # difference with the best model
+}
+
+r3h_ind <- r3h_rec |>
+  mutate(ind = map2(models, data, r3h_indicators)) |>
+  select(label, ind) |>
+  unnest(ind)
+
+knitr::kable(r3h_ind, digits = c(0, 0, 0, 2, 3, 0, 0, 0, 2, 2, 3),
+             caption = "Model comparison for each recovery period")
+```
+```{r}
+#| label: r3h-residuals-prep
+# Nice names for the models (used as panel titles)
+r3h_model_names <- c(linear = "Linear", mono = "Mono-exponential",
+                     bi = "Bi-exponential", `mono + drift` = "Mono-exp. + drift")
+
+# ---------------------------------------------------------------
+# 5c. Residuals of every model, for every recovery
+# ---------------------------------------------------------------
+r3h_res <- r3h_rec |>
+  mutate(res = map2(models, data, \(ms, d)
+                    imap(compact(ms), \(m, name)
+                         tibble(model = name, t = d$t, resid = resid(m))) |>
+                      list_rbind())) |>
+  select(bout, label, res) |>
+  unnest(res) |>
+  mutate(model = factor(model, levels = c("linear", "mono", "bi", "mono + drift")))
+
+# ---------------------------------------------------------------
+# Function: by how much is the model above (+) or below (-) the real HR?
+#   One small panel per model, values averaged in bins of bin_s seconds
+# ---------------------------------------------------------------
+r3h_plot_sign <- function(i, bin_s = 20, max_min = Inf) {
+  d <- r3h_res |>
+    filter(bout == i, t <= max_min * 60) |>
+    # mean residual in each time bin (removes beat-to-beat noise)
+    group_by(model, t = floor(t / bin_s) * bin_s + bin_s / 2) |>
+    summarise(resid = mean(resid), .groups = "drop") |>
+    # residual = real HR - model, so model - real HR = -residual
+    #   e.g. model 10 bpm above the real HR -> +10
+    mutate(error    = -resid,
+           position = if_else(error > 0, "Model above real HR", "Model below real HR"))
+
+  ggplot(d, aes(t / 60, error, fill = position)) +
+    geom_col(width = bin_s / 60) +                     # one bar per time bin
+    geom_hline(yintercept = 0) +
+    facet_wrap(~model, ncol = 1, labeller = as_labeller(r3h_model_names)) +
+    scale_fill_manual(values = c("Model above real HR" = "firebrick",
+                                 "Model below real HR" = "steelblue")) +
+    labs(x = "Time since end of exercise (min)",
+         y = "Model − real HR (bpm)", fill = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "bottom",
+          strip.text = element_text(face = "bold"),
+          panel.grid.minor = element_blank())
+}
+
+# ---------------------------------------------------------------
+# Function: HR + fitted models (top) and sign panels (bottom)
+# ---------------------------------------------------------------
+r3h_plot_fit_sign <- function(i, bin_s = 20, max_min = Inf) {
+  top    <- r3h_plot_recovery(i, max_min) + labs(x = NULL)
+  bottom <- r3h_plot_sign(i, bin_s, max_min)
+  patchwork::wrap_plots(top, bottom, ncol = 1, heights = c(1.5, 3))   # bottom = 2x taller
+}
+```
+
+
+```{r}
+#| label: fig-r3h-res1
+#| fig-cap: "Recovery 1. Top: heart rate and fitted models. Bottom: for each model, difference between the model and the real heart rate (bpm, 20-s bins); positive = model above the real heart rate. Long blocks of the same sign indicate a systematic error."
+#| fig-height: 10
+
+r3h_plot_fit_sign(1, bin_s = 20)
+```
+
+```{r}
+#| label: fig-r3h-res2
+#| fig-cap: "Recovery 2. Top: heart rate and fitted models. Bottom: difference between the model and the real heart rate for each model (bpm) (30-s bins)."
+#| fig-height: 7
+
+r3h_plot_fit_sign(2, bin_s = 30)
+```
+
+```{r}
+#| label: fig-r3h-res3
+#| fig-cap: "Recovery 3. Top: heart rate and fitted models. Bottom: difference between the model and the real heart rate for each model (bpm) (2-min bins)."
+#| fig-height: 8
+
+r3h_plot_fit_sign(3, bin_s = 120)
+```
+```{r}
+#| label: fig-r3h-res3-zoom
+#| fig-cap: "First 20 min of recovery 3. Top: heart rate and fitted models. Bottom: difference between the model and the real heart rate for each model (bpm) (20-s bins)."
+#| fig-height: 8
+
+r3h_plot_fit_sign(3, bin_s = 20, max_min = 20)
+```
+```{r}
+#| label: r3h-summary
+
+# ---------------------------------------------------------------
+# 5e. Final summary: how far is each model from the real HR, on average?
+# ---------------------------------------------------------------
+r3h_summary <- r3h_res |>
+  mutate(model = as.character(model)) |>
+  group_by(bout, label, model) |>
+  summarise(
+    mean_error = mean(-resid),          # signed mean (≈ 0: errors cancel out)
+    MAE        = mean(abs(resid)),      # mean absolute error (bpm)
+    RMSE       = sqrt(mean(resid^2)),   # penalises large errors more
+    .groups = "drop"
+  ) |>
+  # add the number of parameters and ΔAIC from the comparison table
+  left_join(select(r3h_ind, label, model, k, dAIC), by = c("label", "model")) |>
+  # best model of each recovery = lowest AIC (ΔAIC = 0)
+  mutate(best = if_else(dAIC == 0, "best (AIC)", ""),
+         model = factor(model, levels = c("linear", "mono", "bi", "mono + drift"))) |>
+  arrange(bout, model)
+
+r3h_summary |>
+  select(label, model, k, mean_error, MAE, RMSE, dAIC, best) |>
+  knitr::kable(digits = 2,
+               col.names = c("Recovery", "Model", "Parameters", "Mean error (bpm)",
+                             "MAE (bpm)", "RMSE (bpm)", "ΔAIC", ""),
+               caption = "Summary of model performance for each recovery period")
+```
+```{r}
+#| label: fig-r3h-summary
+#| fig-cap: "Mean absolute error (MAE) of each model for each recovery period. The best model according to AIC is labelled 'best'."
+#| fig-height: 4
+
+ggplot(r3h_summary, aes(model, MAE, fill = model)) +
+  geom_col() +
+  # star above the best model (lowest AIC)
+  geom_text(data = filter(r3h_summary, best != ""),
+            aes(label = "best"), vjust = -0.3, size = 4) +
+  facet_wrap(~label, nrow = 1) +
+  scale_fill_manual(values = r3h_model_colours4, labels = r3h_model_names) +
+  scale_x_discrete(labels = r3h_model_names) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +   # room for the label
+  labs(x = NULL, y = "Mean absolute error (bpm)", fill = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        strip.text = element_text(face = "bold"))
+
+```
+The BIC gives the same ranking as the AIC for all recovery periods.
+
+**Recovery 1 (13–24 min).** The linear model is clearly rejected
+($\Delta AIC \approx 706$, $R^2 = 0.37$). Its residuals show a systematic
+pattern: it underestimates heart rate by about 13 bpm at the start of recovery,
+then overestimates it for several minutes (@fig-r3h-res1). The
+mono-exponential model reduces the MAE from 4.9 to 3.4 bpm, increases $R^2$ to
+0.65, and its errors alternate around zero. The mono-exponential + drift model
+has the lowest AIC, but its improvement is negligible in practice (MAE 3.31 vs
+3.35 bpm, same $R^2$). We therefore retain the mono-exponential model as the
+most parsimonious and interpretable description of this recovery
+($\tau \approx 91$ s). The bi-exponential model did not converge.
+
+**Recovery 2 (29–54 min).** All models perform similarly (MAE 5.3–5.6 bpm) and
+show the same residual pattern (@fig-r3h-res2). All models explain almost none
+of the heart rate variation during this period ($R^2 \le 0.06$). The
+mono-exponential model has the lowest AIC; the bi-exponential model, with two
+extra parameters, does not improve the fit ($\Delta AIC \approx 2$, identical
+MAE). The residual waves are not explained by any decay model: they follow the
+changes in movement during this active recovery. The mono-exponential + drift
+model did not converge.
+
+**Recovery 3 (55–190 min).** The linear and mono-exponential models both miss
+the fast decrease at the beginning of recovery: during the first 4 min, they
+underestimate heart rate by up to 10–15 bpm (@fig-r3h-res3-zoom). The
+bi-exponential and mono-exponential + drift models capture this fast phase and
+give the same MAE (6.45 bpm) and nearly the same $R^2$ (0.485 and 0.484). The
+bi-exponential model has the lowest AIC, but its slow component is not
+physiologically interpretable ($\tau_2 \approx 4.5$ h,
+$HR_\infty \approx 31$ bpm, see previous section). The mono-exponential + drift
+model reaches the same accuracy with one parameter less, which confirms that
+the "slow phase" of the bi-exponential model mainly describes a linear drift.
+
+**Limits of the statistical comparison.** For all models and all recovery
+periods, the residuals are strongly autocorrelated: the Durbin–Watson statistic
+ranges from 0.10 to 0.17 (far below the value of 2 expected for independent
+residuals), the lag-1 autocorrelation ranges from 0.91 to 0.95, and the
+Ljung–Box test is highly significant ($p \approx 0$). Beat-to-beat heart rate
+fluctuates with breathing and with changes in movement, which no smooth decay
+curve can capture. With thousands of correlated beats, the AIC differences
+overstate the evidence and should be read as indicative. The choice of model
+must therefore also rely on residual structure, parsimony and physiological
+interpretability.
+
+**In summary**, the post-exercise decrease in heart rate is well described by a
+mono-exponential decay with a time constant of about 1.5–3 min. On the long
+recovery, this fast phase is followed by a slow, almost linear drift over
+several hours, which reflects prolonged rest rather than a second exponential
+recovery process.
+
+### Sensitivity analyses
+
+We use sensitivity analyses to check whether our results change when the data
+are analysed differently. The goal is to see whether our conclusions remain the
+same when we change the length of the analysed window or the signal used.
+
+**Window length.** On recovery 3, the longest recovery period, we fit the models
+over the first 5, 10, 20 and 60 min after the end of exercise, and over the
+whole recovery (about 135 min). This tests whether the estimated time constants
+describe the recovery itself or depend on how long we observe heart rate after
+exercise.
+
+**Signal.** We compare three heart rate signals: beat-to-beat heart rate from
+RR intervals, heart rate averaged in 5-s bins, and the pulse signal computed by
+the device (about one value every 5 s). Averaging in 5-s bins reduces the small
+beat-to-beat fluctuations and makes the RR data comparable with the pulse
+signal. It also strongly reduces the number of points and their
+autocorrelation, which allows us to check whether the large AIC differences
+obtained with beat-to-beat data are inflated. This comparison is done on the
+first 20 min of recovery 3 and on the whole of recoveries 1 and 2 (the pulse
+signal is only used for recovery 3).
+
+```{r}
+#| label: r3h-sensitivity
+
+# ---------------------------------------------------------------
+# 6a. Data sets to test
+# ---------------------------------------------------------------
+r3h_rec1 <- r3h_rec$data[[1]]                 # recovery 1 (RR), already prepared
+r3h_rec3 <- r3h_rec$data[[3]]                 # recovery 3 (RR), already prepared
+r3h_start3 <- r3h_rec$start_min[3]            # start of recovery 3 (min)
+
+# Mean HR in 5-s bins (reduces beat-to-beat noise)
+r3h_bin5 <- function(d) {
+  d |>
+    group_by(t = floor(t / 5) * 5 + 2.5) |>
+    summarise(hr = mean(hr), .groups = "drop")
+}
+
+# Device pulse during recovery 3, with t = 0 at the end of exercise
+r3h_pulse3 <- r3h_pulse |>
+  filter(t_min >= r3h_start3) |>
+  mutate(t = t - r3h_start3 * 60) |>
+  select(t, hr)
+
+# All the data sets we want to compare (t is in seconds)
+r3h_sens <- list(
+  "R3, first 5 min (RR)"        = filter(r3h_rec3, t <= 5 * 60),
+  "R3, first 10 min (RR)"       = filter(r3h_rec3, t <= 10 * 60),
+  "R3, first 20 min (RR)"       = filter(r3h_rec3, t <= 20 * 60),
+  "R3, first 60 min (RR)"       = filter(r3h_rec3, t <= 60 * 60),
+  "R3, whole (RR)"              = r3h_rec3,
+  "R3, first 20 min (5-s bins)" = r3h_bin5(filter(r3h_rec3, t <= 20 * 60)),
+  "R3, first 20 min (pulse)"    = filter(r3h_pulse3, t <= 20 * 60),
+  "R1, whole (RR)"              = r3h_rec1,
+  "R1, whole (5-s bins)"        = r3h_bin5(r3h_rec1),
+  "R1, whole (5-s bins)"        = r3h_bin5(r3h_rec1),
+  "R2, whole (RR)"              = r3h_rec$data[[2]],
+  "R2, whole (5-s bins)"        = r3h_bin5(r3h_rec$data[[2]])
+)
+
+# ---------------------------------------------------------------
+# 6b. Fit the 3 models to one data set and keep the key results
+# ---------------------------------------------------------------
+r3h_sens_row <- function(d, name) {
+  ms <- r3h_fit_models(d)                     # same function as in step 4
+
+  # small helpers that return NA when a model did not converge
+  get_coef <- function(m, p) if (is.null(m)) NA_real_ else coef(m)[[p]]
+  get_se   <- function(m, p) if (is.null(m)) NA_real_ else summary(m)$coefficients[p, 2]
+  get_aic  <- function(m)    if (is.null(m)) NA_real_ else AIC(m)
+
+  tibble(
+    data          = name,
+    n             = nrow(d),
+    tau_mono      = get_coef(ms$mono, "tau"),                        # s
+    tau_low       = tau_mono - 1.96 * get_se(ms$mono, "tau"),        # 95 % CI
+    tau_high      = tau_mono + 1.96 * get_se(ms$mono, "tau"),
+    hr_inf_mono   = get_coef(ms$mono, "hr_inf"),                     # plateau (bpm)
+    tau1_bi       = get_coef(ms$bi, "tau1"),                         # fast (s)
+    tau2_bi       = get_coef(ms$bi, "tau2"),                         # slow (s)
+    dAIC_lin_mono = get_aic(ms$linear) - get_aic(ms$mono),           # > 0: mono better
+    dAIC_mono_bi  = get_aic(ms$mono)   - get_aic(ms$bi)              # > 0: bi better
+  )
+}
+
+# ---------------------------------------------------------------
+# 6c. Run on all data sets and show the table
+# ---------------------------------------------------------------
+r3h_sens_tab <- imap(r3h_sens, r3h_sens_row) |> list_rbind()
+
+knitr::kable(r3h_sens_tab, digits = 1,
+             col.names = c("Data", "n", "τ mono (s)", "CI low", "CI high",
+                           "HR∞ mono (bpm)", "τ1 bi (s)", "τ2 bi (s)",
+                           "AIC linear − mono", "AIC mono − bi"),
+             caption = "Sensitivity of the results to the time window and to the signal used")
+```
+
+```{r}
+#| label: fig-r3h-sensitivity
+#| fig-cap: "Time constants estimated on recovery 3 for increasing window lengths (log scales). The mono-exponential τ increases with the window, whereas the fast bi-exponential τ1 stays around 3 min. The slow τ2 is always above the grey line, i.e. longer than the window itself. The 5-min window is not shown (no plateau could be estimated)."
+#| fig-height: 5
+
+# Recovery 3 windows fitted with RR intervals
+r3h_win <- r3h_sens_tab |>
+  filter(str_starts(data, "R3"), str_ends(data, "\\(RR\\)")) |>
+  mutate(window_min = c(5, 10, 20, 60, round(max(r3h_rec3$t) / 60))) |>
+  filter(window_min > 5)                       # 5 min: no plateau, not interpretable
+
+# The 3 time constants in one long table
+r3h_win_long <- bind_rows(
+  r3h_win |> transmute(window_min, tau = tau_mono, low = tau_low, high = tau_high,
+                       type = "Mono-exponential τ"),
+  r3h_win |> transmute(window_min, tau = tau1_bi, low = NA, high = NA,
+                       type = "Bi-exponential τ1 (fast)"),
+  r3h_win |> transmute(window_min, tau = tau2_bi, low = NA, high = NA,
+                       type = "Bi-exponential τ2 (slow)")
+) |>
+  filter(!is.na(tau))
+
+r3h_tau_types <- c("Mono-exponential τ", "Bi-exponential τ1 (fast)", "Bi-exponential τ2 (slow)")
+
+ggplot(r3h_win_long, aes(window_min, tau, colour = type, linetype = type)) +
+  # grey dotted line: tau = window length
+  geom_line(data = tibble(window_min = c(10, 135), tau = c(10, 135) * 60),
+            aes(window_min, tau), inherit.aes = FALSE,
+            colour = "grey60", linetype = "dotted", linewidth = 0.8) +
+  annotate("text", x = 40, y = 40 * 60 * 1.4, label = "τ = window length",
+           colour = "grey50", angle = 18, size = 3.5) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  geom_errorbar(aes(ymin = low, ymax = high), width = 0.05, na.rm = TRUE) +
+  scale_x_log10(breaks = c(10, 20, 60, 135)) +
+  scale_y_log10(breaks = c(60, 180, 600, 1800, 3600, 3 * 3600, 8 * 3600),
+                labels = c("1 min", "3 min", "10 min", "30 min", "1 h", "3 h", "8 h")) +
+  scale_colour_manual(breaks = r3h_tau_types,
+                      values = c("#7570b3", "#d95f02", "#d95f02")) +
+  scale_linetype_manual(breaks = r3h_tau_types,
+                        values = c("solid", "solid", "dashed")) +
+  labs(title = "Effect of the window length (recovery 3)",
+       x = "Window analysed after the end of exercise (min)",
+       y = "Time constant", colour = NULL, linetype = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom", plot.title = element_text(face = "bold"))
+```
+On recovery 3, the mono-exponential time constant increases strongly with the
+window (@fig-r3h-sensitivity): from 174 s (about 3 min) over the first 10 min, to 330 s over 20 min, 549 s over 60 min and 4 572 s (about 1.3 h) over the whole recovery. The longer the window, the more the mono-exponential model absorbs the slow drift of heart rate, so
+its time constant no longer describes the post-exercise recovery itself. Over
+the first 5 min only (not shown), the model cannot identify a plateau
+($HR_\infty$ stuck at 0, confidence interval of $\tau$ including negative
+values) and the linear model fits better: this window is too short.
+
+In contrast, the fast time constant of the bi-exponential model is stable:
+whenever the model converges, $\tau_1$ stays between 138 and 192 s, i.e. about
+3 min, which matches the mono-exponential $\tau$ obtained over the first 10 min.
+The slow time constant $\tau_2$ ranges from about 2.4 to 8 h and is always
+above the grey line, i.e. longer than the window itself. It therefore never
+describes a real exponential phase, only a slow linear drift. As a consequence,
+the advantage of the bi-exponential model over the mono-exponential model grows
+with the window length ($\Delta AIC$ from 29 over 20 min to 507 over the whole
+recovery), because this drift accumulates over time.
+
+```{r}
+#| label: fig-r3h-sensitivity-signal
+#| fig-cap: "Mono-exponential time constant τ (with 95 % CI) obtained with different signals."
+#| fig-height: 3.5
+
+r3h_sig <- r3h_sens_tab |>
+  filter(data %in% c("R3, first 20 min (RR)", "R3, first 20 min (5-s bins)",
+                     "R3, first 20 min (pulse)", "R1, whole (RR)", "R1, whole (5-s bins)",
+                     "R2, whole (RR)", "R2, whole (5-s bins)")) |>
+  mutate(recovery = case_when(str_starts(data, "R1") ~ "Recovery 1 (whole)",
+                              str_starts(data, "R2") ~ "Recovery 2 (whole)",
+                              str_starts(data, "R3") ~ "Recovery 3 (first 20 min)"),
+         signal   = case_when(str_detect(data, "\\(RR\\)") ~ "RR intervals",
+                              str_detect(data, "5-s bins") ~ "5-s bins",
+                              str_detect(data, "pulse")    ~ "Device pulse"))
+
+ggplot(r3h_sig, aes(tau_mono, signal)) +
+  geom_errorbar(aes(xmin = tau_low, xmax = tau_high),
+                width = 0.2, colour = "#7570b3", orientation = "y") +
+  geom_point(size = 3, colour = "#7570b3") +
+  facet_wrap(~recovery, scales = "free_x") +
+  labs(title = "Effect of the signal (mono-exponential τ)",
+       x = "Time constant τ (s)", y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"),
+        strip.text = element_text(face = "bold"))
+```
+ 
+For each recovery (@fig-r3h-sensitivity-signal), the mono-exponential time constant is similar
+whatever the signal: about 91 s for recovery 1, about 86–93 s for recovery 2,
+and 327–380 s over the first 20 min of recovery 3. The confidence intervals
+overlap in all cases, so our estimates of $\tau$ do not depend on the signal.
+
+The confidence intervals are, however, much narrower with RR intervals. This
+does not mean that RR intervals give a more precise estimate: with more than
+1 000 strongly autocorrelated beats, the standard errors assume many more
+independent observations than there really are. The wider intervals obtained
+with 5-s bins and pulse are probably more realistic. The same bias affects the
+model comparison: over the first 20 min of recovery 3, the advantage of the
+bi-exponential model is large with RR intervals ($\Delta AIC = 28.9$), but small
+with 5-s bins (1.9) and pulse (6.1). On recovery 1, the bi-exponential model
+fitted on 5-s bins collapses into the mono-exponential model
+($\tau_1 = \tau_2 = 91$ s) and does not improve the fit.
+
+Recovery 2 gives a time constant similar to recovery 1, but with a very wide
+confidence interval, especially with 5-s bins (93 s, 95 % CI: 20–165 s). This is consistent with the
+previous section: during this active recovery, heart rate barely decreases and
+none of the decay models describes the data well ($R^2 \le 0.06$).
+
+### Summary of findings for this recording
+
+**Description of the recording.** The 3-hour recording does not contain a
+single exercise followed by one recovery, but three exercise bouts (0–13,
+24–29 and 54–55 min), each followed by a recovery period. Recovery 1
+(13–24 min) is short and calm, recovery 2 (29–54 min) is active (light movement
+continues), and recovery 3 (55–190 min) is long and passive.
+
+**H1: the mono-exponential model describes recovery better than the linear
+model. Supported.** On all three recovery periods, the mono-exponential model
+has a much lower AIC than the linear model ($\Delta AIC$ between 140 and 693).
+The linear model leaves a systematic pattern in the residuals: it
+underestimates heart rate by 10–15 bpm at the start of recovery and
+overestimates it later. It is also physiologically implausible, since it
+predicts that heart rate keeps falling indefinitely.
+
+**H2: after intense exercise and over a long period, the bi-exponential model
+fits better, with a fast (≈ 40–60 s) and a slower (≈ 2 min) time constant
+[@joseph2023]. Partly supported.** On the long recovery (recovery 3), heart rate
+does show two processes: a fast decrease during the first minutes, then a very
+slow decrease over more than two hours. The bi-exponential model has the lowest
+AIC and its fast time constant is stable across windows ($\tau_1 \approx$
+2.3–3.2 min). However, its slow component is not a second recovery phase: its
+time constant (2.4 to 8 h) is always longer than the analysed window and its
+plateau is physiologically impossible ($HR_\infty \approx 31$ bpm). A
+mono-exponential model with a linear drift reaches the same accuracy with one
+parameter less, and the advantage of the bi-exponential model almost disappears
+when heart rate is averaged in 5-s bins. The second part of H2 is supported:
+over the short recovery 1, the mono-exponential model is sufficient and the
+bi-exponential model does not converge.
+
+**H3: periods of continued movement deviate from the model, and the plateau is
+higher than resting heart rate during active recovery. Supported.** During
+recovery 2, heart rate stabilises around 99 bpm, far above the 65–70 bpm
+reached at the end of the recording, and none of the decay models explains the
+heart rate variations ($R^2 \le 0.06$). The residuals follow the changes in
+movement. Recovery 1 also ends on a high plateau (about 106 bpm), because it is
+interrupted by the next exercise bout.
+
+**Chosen model.** We retain the **mono-exponential model**, fitted on a window
+limited to the post-exercise recovery itself (about the first 10 min). It is the
+most parsimonious model, its parameters are physiologically interpretable, and
+its time constant is robust to the signal used. It gives
+$\tau \approx 91$ s (about 1.5 min) after the first exercise bout and
+$\tau \approx 174$ s (about 3 min) after the last one. These values are of the
+same order of magnitude as those found on the 7.5-min recording
+($\tau \approx$ 49–63 s) and in the literature ($\tau \approx 65$ s after a
+maximal test, @joseph2023), but longer. When a long period after exercise is
+analysed, a linear drift term must be added to describe the slow decrease of
+heart rate, as in the 7.5-min recording. This drift is an empirical description,
+not a recovery process.
+
+**Limitations.**
+
+- **Unknown protocol.** No activity labels are provided: the type and intensity
+  of exercise are unknown. Exercise bouts were identified from a chest
+  accelerometer, which does not detect well exercises with little trunk movement 
+  (probably the case during the first 10 min). The end of each bout
+  ($t = 0$) depends on an arbitrary threshold (0.1 g) and has a 1-min
+  resolution.
+- **Interrupted recoveries.** Recoveries 1 and 2 are interrupted by the next
+  exercise bout, so heart rate never returns to rest. Only recovery 3 is long
+  enough to study the full return to rest.
+- **Uncontrolled conditions.** Posture, movement and breathing were not
+  controlled, unlike in laboratory studies where participants recover lying
+  down [@joseph2023]. This may explain our longer time constants.
+- **Slow drift.** The slow decrease over several hours may reflect prolonged
+  rest, sleep or circadian variations rather than recovery from exercise; the
+  data do not allow us to tell these apart.
+- **Autocorrelated residuals.** For all models, residuals are strongly
+  autocorrelated (Durbin–Watson 0.10–0.17). AIC differences, standard errors
+  and confidence intervals computed on beat-to-beat data overstate the
+  evidence and should be read as indicative.
+- **Single participant.** The results come from one recording of one person and
+  cannot be generalised.
