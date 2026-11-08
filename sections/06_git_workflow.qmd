@@ -7,3 +7,16 @@ The `.gitignore` was written at this stage, as required, so that no local or tem
 -   RStudio and R session files (`.Rproj.user/`, `.Rhistory`, `.RData`, `.Ruserdata`), which are specific to each computer;
 -   system files (`.DS_Store`, `Thumbs.db`);
 -   Quarto temporary files and caches (`.quarto/`, `*_cache/`) and LaTeX temporary files (`*.aux`, `*.log`, `*.toc`…), which are regenerated at every render.
+
+## One file and one branch per part
+
+The master document only contains the YAML header, the setup chunk and one `include` line per section. Each part of the report lives in its own file, and each file has a single owner:
+
+| Section | File | Branch | Owner |
+|:-----------------|:-----------------|:-----------------|:-----------------|
+| Random noise and linear regression | `01_random_noise.qmd` | `01_random_noise` | Jennifer |
+| Literature and hypotheses | `02_literature_and_hypotheses.qmd` | `02_literature_and_hypotheses` | Sarah |
+| 3h10m recording | `03_recovery_3h10m.qmd` | `03_recovery_3h10m` | Sarah |
+| 7.5-min recording | `04_recovery_7m30s.qmd` | `04_recovery_7m30s` | Alexis |
+| Conclusions | `05_model_comparison.qmd` | `05_model_comparison` | Jennifer |
+| Git workflow | `06_git_workflow.qmd` | `06_git_workflow` | Alexis |
