@@ -20,11 +20,10 @@ format:
 
 ## Challenges and choices
 
-<!--
-Reflect on the challenges encountered during the work
-and the choices you made to overcome them.
--->
-
+- **Understanding random noise.**In our first experiment, we only ran one simulation and increased the noise by multiplying the same random errors. This made it seem as though increasing noise always decreased the slope and increased the intercept. However, this was only the result of that particular set of random errors, not a general pattern. To investigate this, we ran 1,000 independent simulations for each noise level, generating new random errors each time. We found that the slope and intercept did not consistently change in one direction. Instead, their average values stayed close to the true values, while their variation increased with noise.
+- **Finding recovery periods.** Neither recording told us exactly when exercise started or ended, which made it difficult to know which parts of the data represented heart rate recovery. To solve this, we used acceleration data to estimate when the participant was moving and compared this with changes in heart rate. In the long recording, we measured changes in acceleration over one-minute periods and used a 0.1 g threshold to identify possible activity. We grouped nearby activity periods and studied how heart rate changed afterwards. In the short recording, we noticed that movement decreased around 330 seconds, followed by another decrease in heart rate. This helped us choose which periods to analyse, although we still could not confirm the exact exercise type or intensity.
+- **Choosing a recovery model.** We wanted to find the model that best described how heart rate decreases after exercise. The bi-exponential model sometimes fitted the data better, but it also failed to converge in some cases or gave unrealistic results, such as a final heart rate of 31 bpm. This showed us that a better statistical fit does not always mean a better explanation of the data. To make a more reliable choice, we compared AIC, MAE, R², residuals and recovery time constants instead of relying on one result. We also tested different recovery periods and added linear drift to see if a simpler model could explain the slower decrease over longer periods. We finally preferred the mono-exponential model for initial recovery because it fitted the early decrease well and its parameters were easier to interpret.
+- **Combining the report.** Since we worked on separate sections, we had problems when putting everything together. Some code could not find the data because Quarto was running it from the sections/ folder. We fixed this by adding execute-dir: project to _quarto.yml, so all sections used the same starting folder. Other code only worked because variables were already saved in someone's RStudio environment. We therefore restarted R with an empty environment and ran the complete report to check that all necessary variables were created correctly. between sections.
 
 ## Lessons learned
 
