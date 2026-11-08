@@ -37,3 +37,16 @@ The mono-exponential model was the best model for both recordings, but does not 
 | **H2 — Bi-exponential describes two recovery phases** | **Partly supported** | The long recording shows a fast decrease followed by a slower decrease, but the bi-exponential model gives unrealistic estimates for the slow phase. In the short recording, the 7.5-minute duration is too short to clearly identify a separate slow exponential phase, and the later decrease may be related to reduced movement. Therefore, we cannot confirm two separate exponential recovery phases. |
 | **H3 — Continued movement affects recovery** | **Partly supported** | During Recovery 2 of the long recording, the participant continues moving as we can see by the acceleration data and heart rate stays around 99 bpm instead of decreasing. This partially supports our hypothesis that continued movement may affect heart rate recovery by keeping heart rate elevated and preventing the expected decrease.|
 
+**Limitations**
+
+We do not know exactly what exercise was performed, how intense it was, or when it ended. We used acceleration to estimate activity periods, but movement does not always mean exercise.
+
+Our results also depend on how much of the recovery period we analyze. A short period mainly captures the initial fast decrease, while a longer period may also include slower changes in heart rate.
+
+We also tested different heart rate measurements (RR intervals, pulse data, and 5-second averages). These can give slightly different results because they measure or summarize heart rate differently.
+
+Heart rate measurements taken close together are usually similar, so they do not give us completely new information. This can make our confidence intervals too narrow, meaning we may be less certain about our results than the calculations suggest.
+
+We only studied two recordings, so we cannot assume everyone recovers in the same way.
+
+Overall, the mono-exponential model is our preferred choice for initial heart rate recovery. For longer recovery periods, a mono-exponential model with linear drift may better describe the continued slow decrease in heart rate. However, neither model fully accounts for the effects of continued movement.
