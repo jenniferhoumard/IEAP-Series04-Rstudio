@@ -90,6 +90,22 @@ No interval was rejected, so the RR series is clean. All RR values stay between
 
 #### Identifying the exercise and recovery periods
 
+Before fitting any model, we look at how heart rate changes over the whole
+recording. This lets us find the exercise and recovery periods, and check
+whether the recovery is regular enough to be described by a single curve. We
+compare HR with the acceleration signal, because a change in physical activity
+also changes HR: if the participant keeps moving, HR stays higher than during
+passive rest.
+
+We do not plot the raw acceleration. The accelerometer measures gravity
+(about 1 g) as well as movement, so the raw values mostly reflect how the sensor
+is oriented. We therefore compute the **magnitude** of the acceleration vector,
+$\sqrt{x^2 + y^2 + z^2}$, which does not depend on orientation, and then its
+**standard deviation (SD) in 10-s windows**. When the participant is still, the
+magnitude stays close to 1 g and the SD is close to 0. When the participant
+moves, the magnitude varies and the SD increases. The SD is therefore a simple
+index of how much the participant is moving.
+
 ```{r}
 #| label: fig-r7-overview
 #| fig-cap: "7.5-min recording. Top: beat-to-beat HR from RR intervals (grey) and device pulse (black). Bottom: movement (SD of acceleration magnitude, 10-s windows). The dashed line at 330 s marks the moment the participant stops moving."
