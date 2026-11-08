@@ -1,7 +1,3 @@
-------------------------------------------------------------------------
-
-editor: markdown: wrap: 72 ---
-
 ## Three-hour cardio recording from effort to rest
 
 #### Data import and preparation
@@ -917,4 +913,78 @@ confidence interval, especially with 5-s bins (93 s, 95 % CI: 20–165 s). This 
 previous section: during this active recovery, heart rate barely decreases and
 none of the decay models describes the data well ($R^2 \le 0.06$).
 
+### Summary of findings for this recording
 
+**Description of the recording.** The 3-hour recording does not contain a
+single exercise followed by one recovery, but three exercise bouts (0–13,
+24–29 and 54–55 min), each followed by a recovery period. Recovery 1
+(13–24 min) is short and calm, recovery 2 (29–54 min) is active (light movement
+continues), and recovery 3 (55–190 min) is long and passive.
+
+**H1: the mono-exponential model describes recovery better than the linear
+model. Supported.** On all three recovery periods, the mono-exponential model
+has a much lower AIC than the linear model ($\Delta AIC$ between 140 and 693).
+The linear model leaves a systematic pattern in the residuals: it
+underestimates heart rate by 10–15 bpm at the start of recovery and
+overestimates it later. It is also physiologically implausible, since it
+predicts that heart rate keeps falling indefinitely.
+
+**H2: after intense exercise and over a long period, the bi-exponential model
+fits better, with a fast (≈ 40–60 s) and a slower (≈ 2 min) time constant
+[@joseph2023]. Partly supported.** On the long recovery (recovery 3), heart rate
+does show two processes: a fast decrease during the first minutes, then a very
+slow decrease over more than two hours. The bi-exponential model has the lowest
+AIC and its fast time constant is stable across windows ($\tau_1 \approx$
+2.3–3.2 min). However, its slow component is not a second recovery phase: its
+time constant (2.4 to 8 h) is always longer than the analysed window and its
+plateau is physiologically impossible ($HR_\infty \approx 31$ bpm). A
+mono-exponential model with a linear drift reaches the same accuracy with one
+parameter less, and the advantage of the bi-exponential model almost disappears
+when heart rate is averaged in 5-s bins. The second part of H2 is supported:
+over the short recovery 1, the mono-exponential model is sufficient and the
+bi-exponential model does not converge.
+
+**H3: periods of continued movement deviate from the model, and the plateau is
+higher than resting heart rate during active recovery. Supported.** During
+recovery 2, heart rate stabilises around 99 bpm, far above the 65–70 bpm
+reached at the end of the recording, and none of the decay models explains the
+heart rate variations ($R^2 \le 0.06$). The residuals follow the changes in
+movement. Recovery 1 also ends on a high plateau (about 106 bpm), because it is
+interrupted by the next exercise bout.
+
+**Chosen model.** We retain the **mono-exponential model**, fitted on a window
+limited to the post-exercise recovery itself (about the first 10 min). It is the
+most parsimonious model, its parameters are physiologically interpretable, and
+its time constant is robust to the signal used. It gives
+$\tau \approx 91$ s (about 1.5 min) after the first exercise bout and
+$\tau \approx 174$ s (about 3 min) after the last one. These values are of the
+same order of magnitude as those found on the 7.5-min recording
+($\tau \approx$ 49–63 s) and in the literature ($\tau \approx 65$ s after a
+maximal test, @joseph2023), but longer. When a long period after exercise is
+analysed, a linear drift term must be added to describe the slow decrease of
+heart rate, as in the 7.5-min recording. This drift is an empirical description,
+not a recovery process.
+
+**Limitations.**
+
+- **Unknown protocol.** No activity labels are provided: the type and intensity
+  of exercise are unknown. Exercise bouts were identified from a chest
+  accelerometer, which does not detect well exercises with little trunk
+  movement (e.g. cycling, likely during the first 10 min). The end of each bout
+  ($t = 0$) depends on an arbitrary threshold (0.1 g) and has a 1-min
+  resolution.
+- **Interrupted recoveries.** Recoveries 1 and 2 are interrupted by the next
+  exercise bout, so heart rate never returns to rest. Only recovery 3 is long
+  enough to study the full return to rest.
+- **Uncontrolled conditions.** Posture, movement and breathing were not
+  controlled, unlike in laboratory studies where participants recover lying
+  down [@joseph2023]. This may explain our longer time constants.
+- **Slow drift.** The slow decrease over several hours may reflect prolonged
+  rest, sleep or circadian variations rather than recovery from exercise; the
+  data do not allow us to tell these apart.
+- **Autocorrelated residuals.** For all models, residuals are strongly
+  autocorrelated (Durbin–Watson 0.10–0.17). AIC differences, standard errors
+  and confidence intervals computed on beat-to-beat data overstate the
+  evidence and should be read as indicative.
+- **Single participant.** The results come from one recording of one person and
+  cannot be generalised.
