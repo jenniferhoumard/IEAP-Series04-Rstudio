@@ -1,23 +1,123 @@
 
 ## Three-hour cardio recording from effort to rest
 
-### Test your predictions using the dataset
+#### Data import and preparation
 
-<!--
-- Identify the exercise and recovery periods.
-- Extract and visualise heart rate as a function of time.
-- Identify the period corresponding to post-exercise recovery.
-- Fit appropriate mathematical models to the recovery data.
-- Compare the fitted models using appropriate statistical indicators
-  and residual analysis.
+```{r}
+#| label: r3h-import
+library(tidyverse)
 
-You will have to test:
+# ---------------------------------------------------------------
+# 1. Location of the data and start time of the recording
+# ---------------------------------------------------------------
 
-- A linear model.
-- A mono-exponential decay model.
-- A bi-exponential decay model, if justified by the data.
+# Folder where the unzipped files are stored
+r3h_dir <- "data/cardio-recovery-3h10m"
 
-Do not select a model based on visual appearance alone.
-Consider goodness of fit, residual structure, model complexity
-and physiological interpretability.
--->
+# dataset.json contains the metadata (title, start/end time, signals...)
+r3h_meta <- jsonlite::read_json(file.path(r3h_dir, "dataset.json"))
+
+# Start of the recording, in Unix milliseconds.
+# We use it as the time origin: every timestamp will be expressed
+# relative to this moment.
+r3h_t0 <- r3h_meta$from_timestamp_ms
+
+
+# ---------------------------------------------------------------
+# 2. Beat-to-beat heart rate from RR intervals (main signal)
+# ---------------------------------------------------------------
+
+r3h_rr <- read_csv(file.path(r3h_dir, "rr.csv"),
+                   show_col_types = FALSE) |>   # hide the column message
+  mutate(
+    # timestamp is in ms since 1970 -> subtract the start and
+    # divide by 1000 to get seconds since the start of the recording
+    t     = (timestamp - r3h_t0) / 1000,
+    # same time in minutes (easier to read on 3-hour plots)
+    t_min = t / 60,
+    # "value" = time between two heartbeats, in milliseconds
+    rr    = value,
+    # heart rate in bpm: 60 000 ms in one minute / duration of one beat
+    hr    = 60000 / rr
+  )
+
+
+# ---------------------------------------------------------------
+# 3. Heart rate computed by the device ("pulse", ~1 value / 5 s)
+#    -> used only as an independent check of the RR-based HR
+# ---------------------------------------------------------------
+
+r3h_pulse <- read_csv(file.path(r3h_dir, "pulse.csv"),
+                      show_col_types = FALSE) |>
+  mutate(
+    t     = (timestamp - r3h_t0) / 1000,   # seconds from start
+    t_min = t / 60,                        # minutes from start
+    hr    = value                          # already in bpm
+  )
+
+
+# ---------------------------------------------------------------
+# 4. Movement from the accelerometer
+# ---------------------------------------------------------------
+# The accelerometer gives x, y, z (in g) many times per second.
+# 1) We combine the 3 axes into one magnitude: sqrt(x^2 + y^2 + z^2)
+# 2) We compute its standard deviation (SD) in 60-s windows:
+#    - SD close to 0  -> the person is still
+#    - larger SD      -> the person is moving
+
+r3h_acc <- read_csv(file.path(r3h_dir, "acceleration.csv"),
+                    show_col_types = FALSE) |>   # big file: takes a few seconds
+  mutate(
+    t   = (timestamp - r3h_t0) / 1000,     # seconds from start
+    mag = sqrt(x^2 + y^2 + z^2)            # magnitude of acceleration
+  ) |>
+  # floor(t / 60) * 60 = start of the 60-s window the sample belongs to
+  # + 30           = middle of the window (better for plotting)
+  group_by(t = floor(t / 60) * 60 + 30) |>
+  summarise(acc_sd = sd(mag),              # movement indicator per window
+            .groups = "drop") |>
+  mutate(t_min = t / 60)                   # minutes from start
+
+
+# ---------------------------------------------------------------
+# 5. Body position (code + text label)
+# ---------------------------------------------------------------
+
+r3h_pos <- read_csv(file.path(r3h_dir, "body-position.csv"),
+                    show_col_types = FALSE) |>
+  mutate(t     = (timestamp - r3h_t0) / 1000,
+         t_min = t / 60)
+
+# Look at the column names (we don't know them in advance)
+names(r3h_pos)
+
+# Count how many times each position code/label appears
+# (across(-c(timestamp, t, t_min)) = all columns except the time ones)
+r3h_pos |>
+  count(across(-c(timestamp, t, t_min)))
+
+
+# ---------------------------------------------------------------
+# 6. Summary table: how many points and which time span per signal
+# ---------------------------------------------------------------
+
+tibble(
+  signal      = c("RR intervals", "pulse", "acceleration (60-s windows)", "body position"),
+  n           = c(nrow(r3h_rr), nrow(r3h_pulse), nrow(r3h_acc), nrow(r3h_pos)),
+  t_start_min = c(min(r3h_rr$t_min), min(r3h_pulse$t_min), min(r3h_acc$t_min), min(r3h_pos$t_min)),
+  t_end_min   = c(max(r3h_rr$t_min), max(r3h_pulse$t_min), max(r3h_acc$t_min), max(r3h_pos$t_min))
+) |>
+  knitr::kable(digits = 1, caption = "Signals used in the analysis (3h10m recording)")
+```
+The four signals cover the whole recording (0 to 190 min, i.e. 3 h 10 min),
+so the data set is complete enough for the analysis. The 16 684 RR intervals
+over 190 min correspond to a mean heart rate of about 88 bpm, which is
+consistent with a heart rate falling from about 128 to 66 bpm, as described in
+the data set. The device pulse signal contains 2 456 values, i.e. about one
+value every 5 s, as expected. The acceleration was summarised into 190 windows
+of 60 s, i.e. one value per minute, which is enough to follow changes in
+physical activity over three hours. The body position signal is of limited use:
+192 of the 206 samples are labelled `unknown`, and only 14 samples indicate a
+lying position (prone, supine or on one side).
+
+
