@@ -853,6 +853,26 @@ recovery process.
 
 ### Sensitivity analyses
 
+We use sensitivity analyses to check whether our results change when the data
+are analysed differently. The goal is to see whether our conclusions remain the
+same when we change the length of the analysed window or the signal used.
+
+**Window length.** On recovery 3, the longest recovery period, we fit the models
+over the first 5, 10, 20 and 60 min after the end of exercise, and over the
+whole recovery (about 135 min). This tests whether the estimated time constants
+describe the recovery itself or depend on how long we observe heart rate after
+exercise.
+
+**Signal.** We compare three heart rate signals: beat-to-beat heart rate from
+RR intervals, heart rate averaged in 5-s bins, and the pulse signal computed by
+the device (about one value every 5 s). Averaging in 5-s bins reduces the small
+beat-to-beat fluctuations and makes the RR data comparable with the pulse
+signal. It also strongly reduces the number of points and their
+autocorrelation, which allows us to check whether the large AIC differences
+obtained with beat-to-beat data are inflated. This comparison is done on the
+first 20 min of recovery 3 and on the whole of recoveries 1 and 2 (the pulse
+signal is only used for recovery 3).
+
 ```{r}
 #| label: r3h-sensitivity
 
@@ -976,12 +996,8 @@ ggplot(r3h_win_long, aes(window_min, tau, colour = type, linetype = type)) +
   theme_minimal(base_size = 12) +
   theme(legend.position = "bottom", plot.title = element_text(face = "bold"))
 ```
-We first checked whether the results depend on the length of the window
-analysed after the end of exercise (@fig-r3h-sensitivity). On recovery 3, the
-mono-exponential time constant increases strongly with the window: from
-174 s (about 3 min) over the first 10 min, to 330 s over 20 min, 549 s over
-60 min and 4 572 s (about 1.3 h) over the whole recovery. The longer the window,
-the more the mono-exponential model absorbs the slow drift of heart rate, so
+On recovery 3, the mono-exponential time constant increases strongly with the
+window (@fig-r3h-sensitivity): from 174 s (about 3 min) over the first 10 min, to 330 s over 20 min, 549 s over 60 min and 4 572 s (about 1.3 h) over the whole recovery. The longer the window, the more the mono-exponential model absorbs the slow drift of heart rate, so
 its time constant no longer describes the post-exercise recovery itself. Over
 the first 5 min only (not shown), the model cannot identify a plateau
 ($HR_\infty$ stuck at 0, confidence interval of $\tau$ including negative
@@ -1024,10 +1040,8 @@ ggplot(r3h_sig, aes(tau_mono, signal)) +
   theme(plot.title = element_text(face = "bold"),
         strip.text = element_text(face = "bold"))
 ```
-We then checked whether the results depend on the signal used
-(@fig-r3h-sensitivity-signal): beat-to-beat heart rate from RR intervals, heart
-rate averaged in 5-s bins, and, for recovery 3, the pulse signal computed by the
-device. For each recovery, the mono-exponential time constant is similar
+ 
+For each recovery (@fig-r3h-sensitivity-signal), the mono-exponential time constant is similar
 whatever the signal: about 91 s for recovery 1, about 86–93 s for recovery 2,
 and 327–380 s over the first 20 min of recovery 3. The confidence intervals
 overlap in all cases, so our estimates of $\tau$ do not depend on the signal.
