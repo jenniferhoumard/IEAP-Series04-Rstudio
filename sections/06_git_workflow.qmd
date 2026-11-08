@@ -34,3 +34,7 @@ For example, the pull request of the 7.5-min recording (#1) received 16 review c
 ## Order of the merges
 
 The sections depend on each other: the recording analyses (03, 04) cite the references added in section 02, and the conclusions (05) refer to the figures and results of sections 03 and 04. The pull requests are therefore merged in the order of the report (01 → 02 → 03 → 04 → 05 → 06). After each merge, the owners of the remaining branches merge `main` into their branch, so that they work with the latest shared files and can check that their section still renders with the rest of the report.
+
+## Commit messages
+
+Each commit does one step of a question, and its message describes this step in the imperative: `Import recovery signals for analysis`, `Check RR artefacts and recording gaps`, `Add mono-exponential drift recovery model`, `Proposed a better numerical experiment`. Each question has several commits (between 2 and more than 30 per branch), so the history shows how each analysis was built.
