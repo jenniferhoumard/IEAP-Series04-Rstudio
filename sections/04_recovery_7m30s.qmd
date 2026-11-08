@@ -11,10 +11,21 @@ contains ECG, beat-to-beat RR intervals, a 5-s pulse signal, respiration,
 
 #### Data import and preparation
 
-We use the **RR intervals** as the main signal, because each interval gives one
-heart rate value (HR = 60 000 / RR). This gives about 1 000 points instead of the
-91 points of the device's 5-s `pulse` signal. We keep `pulse` as an independent
-check. The **acceleration** is used to find out whether the participant is moving.
+An **RR interval** is the time, in milliseconds, between two successive
+heartbeats (two successive R waves of the ECG). Heart rate in beats per minute
+is obtained by dividing one minute (60 000 ms) by this interval:
+
+$$HR = \frac{60\,000}{RR}$$
+
+For example, an RR interval of 400 ms corresponds to 150 bpm.
+
+We use the RR intervals as the **main signal**, because each heartbeat gives one
+HR value: about 1 000 points over the recording. The device's `pulse` signal
+gives only one HR value about every 5 s (91 values), so it describes the
+recovery curve much less precisely. We keep `pulse` as an **independent
+cross-check** of the RR-derived HR. We also import the **acceleration**, to find
+out when the participant is moving, because movement keeps HR high and
+therefore affects the recovery curve.
 
 ```{r}
 #| label: r7-import
