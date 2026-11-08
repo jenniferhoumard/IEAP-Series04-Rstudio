@@ -27,5 +27,13 @@ Based on both recordings, we would choose the mono-exponential model to describe
 - **Mono-exponential:** Has 3 parameters and successfully fits the initial heart rate decrease. Allows heart rate to decrease quickly at first and then more slowly.
 - **Bi-exponential:** Has 5 parameters, making it harder to fit. It fails to converge for Recovery 1 and gives difficult-to-interpret or unrealistic estimates for Recoveries 2 and 3. Just because a bi-exponential model fits the data does not prove that the heart is recovering through two separate exponential processes.
 
+**Were our hypotheses supported?**
+
 The mono-exponential model was the best model for both recordings, but does not describe every part equally well. For longer recovery periods, adding linear drift to the model can help describe the continued slow decrease at a constant rate without assuming a second exponential recovery process. 
+
+| Hypothesis | Result | Explanation |
+|---|---|---|
+| **H1 — Mono-exponential fits better than linear** | **Supported** | In both recordings, the mono-exponential model generally fits the initial heart rate decrease better. Heart rate drops quickly at first, then more slowly, rather than decreasing at a constant rate. |
+| **H2 — Bi-exponential describes two recovery phases** | **Partly supported** | The long recording shows a fast decrease followed by a slower decrease, but the bi-exponential model gives unrealistic estimates for the slow phase. In the short recording, the 7.5-minute duration is too short to clearly identify a separate slow exponential phase, and the later decrease may be related to reduced movement. Therefore, we cannot confirm two separate exponential recovery phases. |
+| **H3 — Continued movement affects recovery** | **Partly supported** | During Recovery 2 of the long recording, the participant continues moving as we can see by the acceleration data and heart rate stays around 99 bpm instead of decreasing. This partially supports our hypothesis that continued movement may affect heart rate recovery by keeping heart rate elevated and preventing the expected decrease.|
 
