@@ -328,7 +328,8 @@ patchwork::wrap_plots(r3h_p1, r3h_p2, ncol = 1, heights = c(2, 1))
 What we observe:
 
 - **Three exercise bouts** were detected: 10–13 min, 24–29 min (two close peaks) and 54–55 min. Each bout is followed by an increase in heart rate.
-- **0–10 min:** heart rate is already high (125–140 bpm), although movement stays below the threshold. The participant was probably exercising with little trunk movement (e.g. cycling), which a chest accelerometer does not detect well. We therefore consider that the first bout covers 0–13 min.
+- **0–10 min:** heart rate is already high (125–140 bpm), although movement stays below the threshold. The participant was probably exercising with little trunk movement, which a
+chest accelerometer does not detect well. We therefore consider that the first bout covers 0–13 min.
 - **Recovery 1 (13–24 min):** heart rate falls steadily from about 135 to 105 bpm, with little movement.
 - **Recovery 2 (29–54 min):** heart rate falls to about 100 bpm and then stays on a plateau, while light movement continues. This is an active recovery.
 - **Recovery 3 (55–190 min):** after the last bout, movement almost stops and heart rate decreases slowly from about 115 to 65 bpm over more than two hours, with short isolated peaks (possibly changes in body position).
@@ -478,12 +479,6 @@ r3h_plot_recovery <- function(i, max_min = Inf) {
     theme(legend.position = "bottom",
           plot.title = element_text(face = "bold"))
 }
-```
-
-```{r}
-#| label: fig-r3h-rec1
-#| fig-cap: "Recovery 1 (after the first exercise bout): linear, mono- and bi-exponential fits. The bi-exponential model did not converge."
-#| fig-height: 4
 ```
 
 ```{r}
@@ -1045,8 +1040,8 @@ not a recovery process.
 
 - **Unknown protocol.** No activity labels are provided: the type and intensity
   of exercise are unknown. Exercise bouts were identified from a chest
-  accelerometer, which does not detect well exercises with little trunk
-  movement (e.g. cycling, likely during the first 10 min). The end of each bout
+  accelerometer, which does not detect well exercises with little trunk movement 
+  (probably the case during the first 10 min). The end of each bout
   ($t = 0$) depends on an arbitrary threshold (0.1 g) and has a 1-min
   resolution.
 - **Interrupted recoveries.** Recoveries 1 and 2 are interrupted by the next
