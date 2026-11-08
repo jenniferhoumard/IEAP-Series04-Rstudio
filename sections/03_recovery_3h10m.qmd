@@ -211,6 +211,37 @@ Using the 20 % rule, 71 of the 16 684 RR intervals (0.4 %) were identified as ar
 
 ### Identifying the exercise and recovery periods
 
+The data set does not provide any activity labels, so we used the acceleration
+signal to estimate when the participant was exercising and when they were
+recovering.
+
+**Exercise bouts.** We define an exercise bout as a period of increased
+movement. A minute is considered active when the standard deviation (SD) of the
+acceleration magnitude exceeds 0.1 g. We chose this threshold by inspecting the
+movement signal: the SD is very low during most of the recording (median
+0.013 g; 75 % of the minutes below 0.035 g), whereas only 8 minutes exceed
+0.1 g, with values from 0.10 to 0.71 g. A threshold of 0.1 g therefore separates
+these movement peaks from the rest of the recording. A higher threshold would
+miss part of the activity: with 0.2 g, the third bout (0.197 g at 54.5 min) would
+not be detected at all. This threshold is an estimate: an active minute does
+not guarantee that the participant was exercising, and exercise with little
+trunk movement may not be detected.
+
+**Grouping active minutes.** Active minutes separated by no more than 3 min are
+grouped into the same bout. This allows short breaks within an exercise period
+without treating them as separate activities; for example, the two close
+movement peaks around 25 and 28 min form a single bout. The time between the end
+of a bout and the start of the next one is considered a recovery period.
+
+**Figure details.** Because there are many heart rate values per minute, we
+also compute the mean heart rate for each minute (red line) to make the overall
+trend easier to see. Each mean is plotted at the middle of its one-minute
+window: for example, the beats recorded between 10 and 11 min are plotted at
+10.5 min. The same convention is used for the 60-s acceleration windows. Finally,
+most body-position samples are labelled `unknown`, so we only plot the samples
+with a known lying position; they appear as small blue vertical marks at the top
+of the heart rate panel.
+
 ```{r}
 #| label: fig-r3h-overview
 #| fig-cap: "3h10m recording. Grey areas: exercise bouts (acceleration SD > 0.1 g). Blue areas: recovery periods following each bout. Top: beat-to-beat HR from RR intervals (grey points), device pulse (black) and 1-min mean HR (red); lying positions are marked at the top (blue ticks). Bottom: movement (SD of acceleration magnitude, 60-s windows); dashed line = 0.1 g threshold."
@@ -293,8 +324,6 @@ r3h_p2 <- ggplot(r3h_acc, aes(t_min, acc_sd)) +
 
 patchwork::wrap_plots(r3h_p1, r3h_p2, ncol = 1, heights = c(2, 1))
 ```
-
-No activity labels are provided with the data set, so we identified the exercise bouts from the movement signal: a minute was considered active when the SD of the acceleration magnitude exceeded 0.1 g. Active minutes less than 3 min apart were grouped into the same bout. This threshold clearly separates the movement peaks from the rest of the recording.
 
 What we observe:
 
