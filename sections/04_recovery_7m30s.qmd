@@ -477,12 +477,22 @@ r7_res |>
   with changes in movement. No smooth decay curve can capture this. As a
   result, the AIC, standard errors and F-test computed on ~1 000 beats overstate
   the evidence. The differences between models should be read as indicative.
-  #### Sensitivity analyses
 
-We check whether the conclusions depend on our choices: (1) fitting only the
-**active-recovery window** (0–330 s, constant activity), (2) using the device's
-**pulse** signal instead of RR, and (3) averaging RR-derived HR into **5-s bins**
-to reduce beat-to-beat noise and autocorrelation.
+#### Sensitivity analyses
+
+The main analysis uses the whole recording (0–450 s). But the residuals show
+that the participant's activity changes at about 330 s: before, they are still
+moving (active recovery); after, they are almost still (passive rest). The
+decay models assume that the conditions stay the same during recovery, and
+this change is not part of any of them. We therefore refit the models **on the
+active part only (0–330 s)**, where the activity is roughly constant, and
+compare the results with the whole recording. If the estimates change a lot,
+they depend on the window chosen, and the end-of-movement drop is affecting the
+fit.
+
+We also check two choices about the data: (1) using the device's **pulse**
+signal instead of RR, and (2) averaging RR-derived HR into **5-s bins** to
+reduce beat-to-beat noise and autocorrelation.
 
 ```{r}
 #| label: r7-sensitivity
