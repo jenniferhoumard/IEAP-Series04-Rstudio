@@ -133,6 +133,16 @@ The four signals cover the whole recording (0 to 190 min, i.e. 3 h 10 min), so t
 
 ### Signal quality
 
+Before fitting the models, we check the quality of the RR intervals to identify
+measurement errors that could affect the results. We first look for recording
+gaps, i.e. moments when two consecutive beats are more than 3 s apart, which
+means that the device stopped recording. We then look for artefacts, i.e. RR
+intervals that differ by more than 20 % from the previous one, which usually
+indicate a missed or an extra beat detection. Gaps are detected before removing
+the artefacts, because removing beats would otherwise create artificial gaps.
+Following the data set documentation, gaps are only located and are not filled
+in; artefacts are removed.
+
 ```{r}
 #| label: r3h-quality
 
