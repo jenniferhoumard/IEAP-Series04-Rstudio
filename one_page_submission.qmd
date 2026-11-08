@@ -27,10 +27,7 @@ format:
 
 ## Lessons learned
 
-<!--
-Focus on what you learned from the process,
-rather than simply describing what you did.
-
-Be concise, clear and analytical.
-Use the one-page limit to prioritise your most important insights.
--->
+- $R^2$ does not always tell the whole story. During Recovery 2 of the long recording, heart rate stayed close to 99 bpm and all models had $R^2$  ≤ 0.06. We learned that when heart rate changes very little, models may struggle to explain its variation. This showed us why we should look at the data itself, not just the model's statistics.
+- The recovery time constant (τ) helps us understand recovery speed. We learned that a smaller τ means a faster decrease in heart rate. Our estimates ranged from approximately 49–63 s in the short recording to 91–174 s in the long recording. This showed us that recovery speed can differ between periods and recordings.
+- Heart rate measurements are not completely independent. Measurements taken close together often have similar values. We learned that treating every measurement as independent can make confidence intervals too narrow, giving us more confidence in our estimates than we should have.
+- Scientific results must be compared under similar conditions. Joseph et al. reported τ ≈ 65 s after treadmill exercise with participants lying down. Our recordings had unknown exercise conditions and possible movement. We learned that even when numerical results are similar, we must consider how the data were collected before drawing conclusions.
