@@ -339,12 +339,13 @@ For each recovery period, $t = 0$ is the end of the preceding exercise bout.
 
 ### Fitting the models
 
-We fitted three models to each recovery period separately, because each period
+We fitted four models to each recovery period separately, because each period
 has a different heart rate pattern:
 
 - **Linear:** $HR(t) = \beta_0 + \beta_1 t$
 - **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$
 - **Bi-exponential:** $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$
+- **Mono-exponential + linear drift:** $HR(t) = HR_0 + a\,e^{-t/\tau} + b\,t$
 
 where $HR_\infty$ is the plateau, $a$, $a_1$, $a_2$ the amplitudes of the
 decrease and $\tau$, $\tau_1$, $\tau_2$ the time constants. For each period,
@@ -368,6 +369,15 @@ For each parameter, we report an approximate 95 % confidence interval
 (estimate ± 1.96 × standard error). These intervals are only approximate for
 non-linear models, and they are probably too narrow here because the
 beat-to-beat residuals are autocorrelated (see the model comparison).
+
+The fourth model was added because recovery 3 shows a fast initial decrease
+followed by a slow, almost linear decline over several hours. The
+bi-exponential model can follow this pattern, but its slow component gives
+unrealistic parameter estimates (see below). Adding a linear drift term
+describes this slow decrease without assuming that it is a second exponential
+recovery process. We can then check whether this simpler model, with one
+parameter less, fits the data as well as the bi-exponential model. The same
+approach was used for the 7.5-min recording (Section 04).
 
 ```{r}
 #| label: r3h-fit
@@ -460,6 +470,42 @@ r3h_rec |>
   unnest(params) |>
   knitr::kable(digits = 2, caption = "Fitted parameters for each recovery period (time in s)")
 ```
+```{r}
+#| label: r3h-fit-drift
+
+# ---------------------------------------------------------------
+# 4e. Fourth model: mono-exponential + linear drift
+#     HR = hr0 + a * exp(-t / tau) + b * t
+# ---------------------------------------------------------------
+r3h_fit_drift <- function(d) {
+  hr_start <- mean(d$hr[d$t < 30])
+  hr_end   <- median(d$hr[d$t > 0.8 * max(d$t)])
+  amp      <- max(hr_start - hr_end, 1)
+
+  # try several starting values for tau, keep the best converged fit
+  fits <- map(c(60, 120, 300), \(tau0) tryCatch(
+    nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = d,
+        start = list(hr0 = hr_end, a = amp, tau = tau0, b = 0),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  fits <- compact(fits)
+  if (length(fits) == 0) NULL else fits[[which.min(map_dbl(fits, deviance))]]
+}
+
+# Add this model to the list of models of each recovery
+r3h_rec <- r3h_rec |>
+  mutate(models = map2(models, data, \(ms, d)
+                       c(ms, list(`mono + drift` = r3h_fit_drift(d)))))
+
+# Parameters of the new model
+r3h_rec |>
+  mutate(params = map(models, \(ms) r3h_param_table(ms$`mono + drift`, "mono + drift"))) |>
+  select(label, params) |>
+  unnest(params) |>
+  knitr::kable(digits = 3,
+               caption = "Fitted parameters of the mono-exponential + linear drift model (time in s, b in bpm/s)")
+
+```
 
 ```{r}
 #| label: r3h-plot-function
@@ -482,6 +528,7 @@ r3h_obs <- r3h_rec |>
   unnest(data)
 
 r3h_model_colours <- c(linear = "#1b9e77", mono = "#7570b3", bi = "#d95f02")
+r3h_model_colours4 <- c(r3h_model_colours, `mono + drift` = "#e7298a")
 
 # ---------------------------------------------------------------
 # Function: plot one recovery period
@@ -496,9 +543,10 @@ r3h_plot_recovery <- function(i, max_min = Inf) {
   ggplot(obs, aes(t / 60, hr)) +
     geom_point(colour = "grey60", size = 0.6, alpha = 0.4) +
     geom_line(data = prd, aes(colour = model), linewidth = 1.1) +
-    scale_colour_manual(values = r3h_model_colours,
-                        breaks = c("linear", "mono", "bi"),
-                        labels = c("Linear", "Mono-exponential", "Bi-exponential")) +
+    scale_colour_manual(values = r3h_model_colours4,
+                        breaks = c("linear", "mono", "bi", "mono + drift"),
+                        labels = c("Linear", "Mono-exponential",
+                                   "Bi-exponential", "Mono-exp. + drift")) +
     labs(title = paste0("Recovery ", i, " (",
                         rec$start_min, "–", round(rec$end_min), " min of the recording)",
                         # add ": first 20 min" only when we zoom
@@ -513,7 +561,7 @@ r3h_plot_recovery <- function(i, max_min = Inf) {
 
 ```{r}
 #| label: fig-r3h-rec1
-#| fig-cap: "Recovery 1 (after the first exercise bout): linear, mono- and bi-exponential fits. The bi-exponential model did not converge."
+#| fig-cap: "Recovery 1 (after the first exercise bout): linear, mono-exponential, bi-exponential and mono-exponential + drift fits"
 #| fig-height: 4
 
 r3h_plot_recovery(1)
@@ -521,7 +569,7 @@ r3h_plot_recovery(1)
 
 ```{r}
 #| label: fig-r3h-rec2
-#| fig-cap: "Recovery 2 (active recovery after the second exercise bout): linear, mono- and bi-exponential fits."
+#| fig-cap: " Recovery 2 (active recovery after the second exercise bout): linear, mono-exponential and bi-exponential fits. The mono-exponential + drift model did not converge.
 #| fig-height: 4
 
 r3h_plot_recovery(2)
@@ -529,7 +577,7 @@ r3h_plot_recovery(2)
 
 ```{r}
 #| label: fig-r3h-rec3
-#| fig-cap: "Recovery 3 (after the last exercise bout, until the end of the recording): linear, mono- and bi-exponential fits."
+#| fig-cap: "Recovery 3 (after the last exercise bout, until the end of the recording): linear, mono-exponential, bi-exponential and mono-exponential + drift fits"
 #| fig-height: 4
 
 r3h_plot_recovery(3)
@@ -537,20 +585,20 @@ r3h_plot_recovery(3)
 
 ```{r}
 #| label: fig-r3h-rec3-zoom
-#| fig-cap: "Zoom on the first 20 min of recovery 3."
+#| fig-cap: "Zoom on the first 20 min of recovery 3 : linear, mono-exponential, bi-exponential and mono-exponential + drift fits"
 #| fig-height: 4
 
 r3h_plot_recovery(3, max_min = 20)
 ```
 
-**Recovery 1 (13–24 min, @fig-r3h-rec1).** The mono-exponential model gives a time constant $\tau \approx 91$ s (95 % CI: 82–99 s), an amplitude of about 27 bpm and a plateau of about 106 bpm. These parameters are precise and physiologically plausible. The linear model misses the fast decrease at the beginning of recovery. The bi-exponential model did not converge, which suggests that the data do not contain enough information to estimate two distinct time constants over this short period.
+**Recovery 1 (13–24 min, @fig-r3h-rec1).** The mono-exponential model gives a time constant $\tau \approx 91$ s (95 % CI: 82–99 s), an amplitude of about 27 bpm and a plateau of about 106 bpm. These parameters are precise and physiologically plausible. The linear model misses the fast decrease at the beginning of recovery. The bi-exponential model did not converge, which suggests that the data do not contain enough information to estimate two distinct time constants over this short period.   The mono-exponential + drift model is almost identical to the mono-exponential model: its drift term adds very little over this short period.
 
-**Recovery 2 (29–54 min, @fig-r3h-rec2).** The decrease in heart rate is small (amplitude of about 11 bpm) and heart rate quickly stabilises around 99 bpm, consistent with the light movement that continues during this period (active recovery). The mono-exponential time constant ($\tau \approx 86$ s) is estimated with a wide confidence interval (58–115 s). The bi-exponential model converged but is not interpretable: its second time constant is shorter than the first one and the confidence interval of its amplitude includes negative values. The two exponential components cannot be separated.
+**Recovery 2 (29–54 min, @fig-r3h-rec2).** The decrease in heart rate is small (amplitude of about 11 bpm) and heart rate quickly stabilises around 99 bpm, consistent with the light movement that continues during this period (active recovery). The mono-exponential time constant ($\tau \approx 86$ s) is estimated with a wide confidence interval (58–115 s). The bi-exponential model converged but is not interpretable: its second time constant is shorter than the first one and the confidence interval of its amplitude includes negative values. The two exponential components cannot be separated. The mono-exponential + drift model did not converge.
 
 **Recovery 3 (55–190 min, @fig-r3h-rec3 and @fig-r3h-rec3-zoom).** This is the longest and calmest recovery period. Two processes are visible: a fast decrease in heart rate during the first minutes, then a very slow decrease over more than two hours.
 
 - The mono-exponential model only captures the slow decrease ($\tau \approx 4\,570$ s, i.e. about 76 min, plateau ≈ 64 bpm). It misses the fast initial drop: its curve starts at about 97 bpm, whereas the observed heart rate is about 112 bpm (@fig-r3h-rec3-zoom).
-- The bi-exponential model follows both phases. Its fast component ($\tau_1 \approx 174$ s, i.e. about 3 min; amplitude ≈ 21 bpm) describes the early recovery. However, its slow component is not physiologically interpretable: $\tau_2 \approx 16\,400$ s (about 4.5 h, longer than the recording itself) and the plateau ($HR_\infty \approx 31$ bpm) is far below any plausible resting heart rate. When $\tau_2$ is much longer than the observation window, $a_2 e^{-t/\tau_2}$ behaves like a straight line: the "slow phase" is in fact a linear drift of about 0.2 bpm/min. The same behaviour was observed on the 7.5-min recording.
+- The bi-exponential model follows both phases. Its fast component ($\tau_1 \approx 174$ s, i.e. about 3 min; amplitude ≈ 21 bpm) describes the early recovery. However, its slow component is not physiologically interpretable: $\tau_2 \approx 16\,400$ s (about 4.5 h, longer than the recording itself) and the plateau ($HR_\infty \approx 31$ bpm) is far below any plausible resting heart rate. When $\tau_2$ is much longer than the observation window, $a_2 e^{-t/\tau_2}$ behaves like a straight line: the "slow phase" is in fact a linear drift of about 0.2 bpm/min. The same behaviour was observed on the 7.5-min recording. Accordingly, the mono-exponential + drift model gives a curve that is almost indistinguishable from the bi-exponential one (@fig-r3h-rec3-zoom).
 
 The time constants of the fast phase (91 s for recovery 1, 174 s for recovery 3) are of the same order of magnitude as those reported in the literature, although longer than the 44–65 s found by @joseph2023 after a maximal test with supine recovery. The intensity of exercise in our recording is unknown, and recovery took place without controlled posture, which may explain part of this difference. The models are compared quantitatively in the next section.
 
@@ -559,32 +607,6 @@ The time constants of the fast phase (91 s for recovery 1, 174 s for recovery 3)
 
 ```{r}
 #| label: r3h-compare
-
-# ---------------------------------------------------------------
-# 5a. Fourth model: mono-exponential + linear drift
-#     HR = hr0 + a * exp(-t / tau) + b * t
-#     (same test as in the 7.5-min analysis)
-# ---------------------------------------------------------------
-r3h_fit_drift <- function(d) {
-  hr_start <- mean(d$hr[d$t < 30])
-  hr_end   <- median(d$hr[d$t > 0.8 * max(d$t)])
-  amp      <- max(hr_start - hr_end, 1)
-
-  # try several starting values for tau, keep the best converged fit
-  fits <- map(c(60, 120, 300), \(tau0) tryCatch(
-    nls(hr ~ hr0 + a * exp(-t / tau) + b * t, data = d,
-        start = list(hr0 = hr_end, a = amp, tau = tau0, b = 0),
-        control = list(maxiter = 500)),
-    error = function(e) NULL))
-  fits <- compact(fits)
-  if (length(fits) == 0) NULL else fits[[which.min(map_dbl(fits, deviance))]]
-}
-
-# Add this model to the list of models of each recovery
-r3h_rec <- r3h_rec |>
-  mutate(models = map2(models, data, \(ms, d)
-                       c(ms, list(`mono + drift` = r3h_fit_drift(d)))))
-
 # ---------------------------------------------------------------
 # 5b. Indicators of goodness of fit and residual structure
 # ---------------------------------------------------------------
@@ -632,10 +654,6 @@ r3h_res <- r3h_rec |>
   select(bout, label, res) |>
   unnest(res) |>
   mutate(model = factor(model, levels = c("linear", "mono", "bi", "mono + drift")))
-
-# Colours: same as the fit figures + one for the 4th model
-r3h_model_colours4 <- c(r3h_model_colours, `mono + drift` = "#e7298a")
-
 
 # ---------------------------------------------------------------
 # Function: by how much is the model above (+) or below (-) the real HR?
