@@ -30,3 +30,7 @@ Since all sections are rendered in the same R session, two sections could overwr
 No section was merged directly into `main`. When a section was ready, its owner opened a **pull request** on GitHub and asked the two other members for a review. Reviewers commented on specific lines (clarity of the explanations, missing justifications, rendering problems, consistency with the other sections), and the owner answered each comment with new commits on the same branch before the merge.
 
 For example, the pull request of the 7.5-min recording (#1) received 16 review comments. They were addressed in 10 separate commits, one per comment (e.g. `Explain RR intervals and choice of HR signal`, `Replace hardcoded values with inline R`), so that the history shows how each remark was handled. Pull requests were merged with **"Create a merge commit"** rather than "Squash and merge", so that every individual commit stays visible in `main` (e.g. `Merge pull request #2 from jenniferhoumard/01_random_noise`).
+
+## Order of the merges
+
+The sections depend on each other: the recording analyses (03, 04) cite the references added in section 02, and the conclusions (05) refer to the figures and results of sections 03 and 04. The pull requests are therefore merged in the order of the report (01 → 02 → 03 → 04 → 05 → 06). After each merge, the owners of the remaining branches merge `main` into their branch, so that they work with the latest shared files and can check that their section still renders with the rest of the report.
