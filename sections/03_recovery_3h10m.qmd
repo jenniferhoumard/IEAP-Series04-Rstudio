@@ -1,9 +1,6 @@
----
+------------------------------------------------------------------------
 
-editor: 
-  markdown: 
-    wrap: 72
----
+editor: markdown: wrap: 72 ---
 
 ## Three-hour cardio recording from effort to rest
 
@@ -283,3 +280,198 @@ What we observe:
 - The body position signal is mostly `unknown`; lying positions appear only sporadically and do not help to define the phases.
 
 For each recovery period, $t = 0$ is the end of the preceding exercise bout.
+
+### Fitting the models
+
+```{r}
+#| label: r3h-fit
+
+# ---------------------------------------------------------------
+# 4a. Extract one recovery period and reset time to 0
+# ---------------------------------------------------------------
+# start_min / end_min come from the r3h_recoveries table (step 3).
+# t becomes the time (s) since the END of the preceding exercise bout.
+r3h_get_recovery <- function(start_min, end_min) {
+  r3h_rr |>
+    filter(t_min >= start_min, t_min <= end_min) |>   # keep this period only
+    mutate(t = t - start_min * 60) |>                  # t = 0 at end of exercise
+    select(t, hr)
+}
+
+# ---------------------------------------------------------------
+# 4b. Fit the 3 models to one recovery period
+# ---------------------------------------------------------------
+r3h_fit_models <- function(d) {
+
+  # Starting values estimated from the data themselves:
+  hr_start <- mean(d$hr[d$t < 30])                    # mean HR in the first 30 s
+  hr_end   <- median(d$hr[d$t > 0.8 * max(d$t)])      # median HR in the last 20 %
+  amp      <- max(hr_start - hr_end, 1)               # size of the HR drop (bpm)
+
+  # --- Linear model: HR = b0 + b1 * t
+  linear <- lm(hr ~ t, data = d)
+
+  # --- Mono-exponential: HR = hr_inf + a * exp(-t / tau)
+  #     hr_inf = plateau, a = amplitude, tau = time constant (s)
+  #     "port" algorithm allows bounds (a >= 0, tau >= 1 s)
+  mono <- tryCatch(
+    nls(hr ~ hr_inf + a * exp(-t / tau), data = d,
+        start = list(hr_inf = hr_end, a = amp, tau = 60),
+        algorithm = "port",
+        lower = c(0, 0, 1), upper = c(200, 200, 1e5),
+        control = list(maxiter = 500)),
+    error = function(e) NULL)                          # NULL if it fails
+
+  # --- Bi-exponential: HR = hr_inf + a1*exp(-t/tau1) + a2*exp(-t/tau2)
+  #     Very sensitive to starting values -> we try several
+  #     (first one inspired by Joseph et al. 2023: tau1 ~ 44 s, tau2 ~ 120 s)
+  starts <- list(
+    list(hr_inf = hr_end,      a1 = 0.6 * amp, tau1 = 40, a2 = 0.4 * amp, tau2 = 120),
+    list(hr_inf = hr_end,      a1 = 0.5 * amp, tau1 = 60, a2 = 0.5 * amp, tau2 = 600),
+    list(hr_inf = hr_end - 10, a1 = 0.5 * amp, tau1 = 60, a2 = 0.5 * amp, tau2 = 3000)
+  )
+  bi_fits <- map(starts, \(s) tryCatch(
+    nls(hr ~ hr_inf + a1 * exp(-t / tau1) + a2 * exp(-t / tau2), data = d,
+        start = s, algorithm = "port",
+        lower = c(0, 0, 1, 0, 1), upper = c(200, 200, 1e4, 200, 1e5),
+        control = list(maxiter = 500)),
+    error = function(e) NULL))
+  bi_fits <- compact(bi_fits)                          # remove failed fits
+  # keep the fit with the smallest residual sum of squares (deviance)
+  bi <- if (length(bi_fits) == 0) NULL else bi_fits[[which.min(map_dbl(bi_fits, deviance))]]
+
+  list(linear = linear, mono = mono, bi = bi)
+}
+
+# ---------------------------------------------------------------
+# 4c. Apply to the 3 recovery periods
+# ---------------------------------------------------------------
+# One row per recovery; "data" and "models" are list-columns
+r3h_rec <- r3h_recoveries |>
+  mutate(
+    label  = paste0("Recovery ", bout, " (", start_min, "–", round(end_min), " min)"),
+    data   = map2(start_min, end_min, r3h_get_recovery),   # the beats of each period
+    models = map(data, r3h_fit_models)                     # the 3 fitted models
+  )
+
+# ---------------------------------------------------------------
+# 4d. Table of fitted parameters (estimate + standard error + 95 % CI)
+# ---------------------------------------------------------------
+r3h_param_table <- function(m, model_name) {
+  if (is.null(m)) return(NULL)                         # skip failed fits
+  s <- summary(m)$coefficients
+  tibble(model     = model_name,
+         parameter = rownames(s),
+         estimate  = s[, 1],
+         SE        = s[, 2],
+         CI_low    = s[, 1] - 1.96 * s[, 2],
+         CI_high   = s[, 1] + 1.96 * s[, 2])
+}
+
+r3h_rec |>
+  mutate(params = map(models, \(ms) imap(compact(ms), r3h_param_table) |> list_rbind())) |>
+  select(label, params) |>
+  unnest(params) |>
+  knitr::kable(digits = 2, caption = "Fitted parameters for each recovery period (time in s)")
+```
+
+```{r}
+#| label: r3h-plot-function
+
+# ---------------------------------------------------------------
+# Predicted curves and observed data (same as before)
+# ---------------------------------------------------------------
+r3h_pred <- r3h_rec |>
+  mutate(pred = map2(data, models, \(d, ms) {
+    grid <- tibble(t = seq(0, max(d$t), length.out = 500))
+    imap(compact(ms), \(m, name)
+         mutate(grid, model = name, hr = predict(m, newdata = grid))) |>
+      list_rbind()
+  })) |>
+  select(bout, pred) |>
+  unnest(pred)
+
+r3h_obs <- r3h_rec |>
+  select(bout, data) |>
+  unnest(data)
+
+r3h_model_colours <- c(linear = "#1b9e77", mono = "#7570b3", bi = "#d95f02")
+
+# ---------------------------------------------------------------
+# Function: plot one recovery period
+#   i       = number of the recovery (1, 2 or 3)
+#   max_min = optional: only show the first max_min minutes (zoom)
+# ---------------------------------------------------------------
+r3h_plot_recovery <- function(i, max_min = Inf) {
+  rec <- r3h_rec[r3h_rec$bout == i, ]                       # info on this recovery
+  obs <- filter(r3h_obs,  bout == i, t <= max_min * 60)     # its data
+  prd <- filter(r3h_pred, bout == i, t <= max_min * 60)     # its fitted curves
+
+  ggplot(obs, aes(t / 60, hr)) +
+    geom_point(colour = "grey60", size = 0.6, alpha = 0.4) +
+    geom_line(data = prd, aes(colour = model), linewidth = 1.1) +
+    scale_colour_manual(values = r3h_model_colours,
+                        breaks = c("linear", "mono", "bi"),
+                        labels = c("Linear", "Mono-exponential", "Bi-exponential")) +
+    labs(title = paste0("Recovery ", i, " (",
+                        rec$start_min, "–", round(rec$end_min), " min of the recording)",
+                        # add ": first 20 min" only when we zoom
+                        if (is.finite(max_min)) paste0(": first ", max_min, " min") else ""),
+         x = "Time since end of exercise (min)", y = "Heart rate (bpm)",
+         colour = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "bottom",
+          plot.title = element_text(face = "bold"))
+}
+```
+
+```{r}
+#| label: fig-r3h-rec1
+#| fig-cap: "Recovery 1 (after the first exercise bout): linear, mono- and bi-exponential fits. The bi-exponential model did not converge."
+#| fig-height: 4
+```
+
+```{r}
+#| label: fig-r3h-rec1
+#| fig-cap: "Recovery 1 (after the first exercise bout): linear, mono- and bi-exponential fits. The bi-exponential model did not converge."
+#| fig-height: 4
+
+r3h_plot_recovery(1)
+```
+
+```{r}
+#| label: fig-r3h-rec2
+#| fig-cap: "Recovery 2 (active recovery after the second exercise bout): linear, mono- and bi-exponential fits."
+#| fig-height: 4
+
+r3h_plot_recovery(2)
+```
+
+```{r}
+#| label: fig-r3h-rec3
+#| fig-cap: "Recovery 3 (after the last exercise bout, until the end of the recording): linear, mono- and bi-exponential fits."
+#| fig-height: 4
+
+r3h_plot_recovery(3)
+```
+
+```{r}
+#| label: fig-r3h-rec3-zoom
+#| fig-cap: "Zoom on the first 20 min of recovery 3."
+#| fig-height: 4
+
+r3h_plot_recovery(3, max_min = 20)
+```
+
+We fitted the three models to each recovery period, with $t = 0$ at the end of the preceding exercise bout. Non-linear models were fitted by least squares with `nls()`. For the bi-exponential model, we tried several sets of starting values (the first one based on @joseph2023) and kept the best converged fit.
+
+**Recovery 1 (13–24 min, @fig-r3h-rec1).** The mono-exponential model gives a time constant $\tau \approx 91$ s (95 % CI: 82–99 s), an amplitude of about 27 bpm and a plateau of about 106 bpm. These parameters are precise and physiologically plausible. The linear model misses the fast decrease at the beginning of recovery. The bi-exponential model did not converge, which suggests that the data do not contain enough information to estimate two distinct time constants over this short period.
+
+**Recovery 2 (29–54 min, @fig-r3h-rec2).** The decrease in heart rate is small (amplitude of about 11 bpm) and heart rate quickly stabilises around 99 bpm, consistent with the light movement that continues during this period (active recovery). The mono-exponential time constant ($\tau \approx 86$ s) is estimated with a wide confidence interval (58–115 s). The bi-exponential model converged but is not interpretable: its second time constant is shorter than the first one and the confidence interval of its amplitude includes negative values. The two exponential components cannot be separated.
+
+**Recovery 3 (55–190 min, @fig-r3h-rec3 and @fig-r3h-rec3-zoom).** This is the longest and calmest recovery period. Two processes are visible: a fast decrease in heart rate during the first minutes, then a very slow decrease over more than two hours.
+
+- The mono-exponential model only captures the slow decrease ($\tau \approx 4\,570$ s, i.e. about 76 min, plateau ≈ 64 bpm). It misses the fast initial drop: its curve starts at about 97 bpm, whereas the observed heart rate is about 112 bpm (@fig-r3h-rec3-zoom).
+- The bi-exponential model follows both phases. Its fast component ($\tau_1 \approx 174$ s, i.e. about 3 min; amplitude ≈ 21 bpm) describes the early recovery. However, its slow component is not physiologically interpretable: $\tau_2 \approx 16\,400$ s (about 4.5 h, longer than the recording itself) and the plateau ($HR_\infty \approx 31$ bpm) is far below any plausible resting heart rate. When $\tau_2$ is much longer than the observation window, $a_2 e^{-t/\tau_2}$ behaves like a straight line: the "slow phase" is in fact a linear drift of about 0.2 bpm/min. The same behaviour was observed on the 7.5-min recording.
+
+The time constants of the fast phase (91 s for recovery 1, 174 s for recovery 3) are of the same order of magnitude as those reported in the literature, although longer than the 44–65 s found by @joseph2023 after a maximal test with supine recovery. The intensity of exercise in our recording is unknown, and recovery took place without controlled posture, which may explain part of this difference. The models are compared quantitatively in the next section.
