@@ -1,15 +1,9 @@
+## Repository and initial setup
 
-<!--
-Include an analysis of your team’s workflow strategy using Git.
+Jennifer created the public repository `IEAP-Series04-Rstudio` and added Sarah and Alexis as collaborators. Her first commits set up the whole project **before** anyone started working on the questions: `README.md`, `LICENSE`, `.gitignore`, the RStudio project, the master document `IEAP-Series04-Rstudio.qmd`, the bibliography style (`styles/apa.csl`), the two data sets and one empty file per part of the report in `sections/`. Each section file initially contained the instructions of its question as a comment, so that everyone knew exactly what to write and where.
 
-You must use branches to work on different questions in parallel,
-and merge them into the master document when they are ready.
+The `.gitignore` was written at this stage, as required, so that no local or temporary file could enter the history:
 
-You have to choose what to include in your .gitignore
-and do it BEFORE working together.
-
-The repository should show:
-
-- A clear git history, with meaningful commit messages.
-- A principled use of branches.
--->
+-   RStudio and R session files (`.Rproj.user/`, `.Rhistory`, `.RData`, `.Ruserdata`), which are specific to each computer;
+-   system files (`.DS_Store`, `Thumbs.db`);
+-   Quarto temporary files and caches (`.quarto/`, `*_cache/`) and LaTeX temporary files (`*.aux`, `*.log`, `*.toc`…), which are regenerated at every render.
