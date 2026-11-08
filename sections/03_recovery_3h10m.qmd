@@ -120,4 +120,79 @@ physical activity over three hours. The body position signal is of limited use:
 192 of the 206 samples are labelled `unknown`, and only 14 samples indicate a
 lying position (prone, supine or on one side).
 
+### Signal quality
+
+```{r}
+#| label: r3h-quality
+
+# ---------------------------------------------------------------
+# 2a. Recording gaps
+# ---------------------------------------------------------------
+# Normally, two consecutive beats are less than 1-2 s apart.
+# If the time between two beats is much longer (here > 3 s),
+# the device stopped recording: this is a gap, not a real beat.
+# The README says gaps are preserved and not filled in,
+# so we only locate them; we do NOT fill them.
+
+r3h_gaps <- r3h_rr |>
+  mutate(dt = t - lag(t)) |>              # time since the previous beat (s)
+  filter(dt > 3) |>                       # keep only abnormal intervals
+  transmute(
+    gap_start_min = (t - dt) / 60,        # last beat before the gap (min)
+    gap_end_min   = t_min,                # first beat after the gap (min)
+    duration_s    = dt                    # length of the gap (s)
+  )
+
+# Table of all gaps
+r3h_gaps |>
+  knitr::kable(digits = 1,
+               caption = "Recording gaps in the RR series (> 3 s between beats)")
+
+# Overall summary of the gaps
+r3h_gaps |>
+  summarise(n_gaps         = n(),
+            total_gap_min  = sum(duration_s) / 60,
+            longest_gap_s  = if (n() == 0) 0 else max(duration_s)) |>
+  knitr::kable(digits = 1, caption = "Summary of recording gaps")
+
+# ---------------------------------------------------------------
+# 2b. RR artefacts (missed or extra beats)
+# ---------------------------------------------------------------
+# A common rule: an RR interval is an artefact if it differs by more
+# than 20 % from the previous one (a real heart cannot change that
+# fast from one beat to the next).
+
+r3h_rr <- r3h_rr |>
+  mutate(
+    rel_change = abs(rr / lag(rr) - 1),   # relative change vs previous beat
+    artefact   = !is.na(rel_change) &     # first beat has no previous one
+                 rel_change > 0.20        # TRUE if change > 20 %
+  )
+
+# Quality table: before removing anything
+r3h_rr |>
+  summarise(n_beats     = n(),
+            n_artefacts = sum(artefact),
+            pct_artefacts = 100 * mean(artefact),
+            rr_min_ms   = min(rr),  rr_max_ms  = max(rr),
+            hr_min_bpm  = min(hr),  hr_max_bpm = max(hr)) |>
+  knitr::kable(digits = 1, caption = "RR interval quality check")
+
+# Remove the artefacts: from now on, r3h_rr only contains clean beats
+r3h_rr <- filter(r3h_rr, !artefact)
+
+summary(r3h_rr$hr)
+```
+No recording gap longer than 3 s was found in the RR series. The gaps reported
+in `dataset.json` (up to about 60 s) concern the raw ECG, respiration and
+acceleration signals, not the RR intervals, which cover the whole recording.
+
+Using the 20 % rule, 71 of the 16 684 RR intervals (0.4 %) were identified as
+artefacts and removed. This very low proportion shows that the RR series is of
+good quality. After cleaning, heart rate ranges from about 52 to 158 bpm
+(median 89 bpm), which is physiologically plausible. The maximum is higher than
+the 128 bpm mentioned in the data set description, which suggests that a
+period of higher effort occurs during the recording; this is examined in the
+next section.
+
 
