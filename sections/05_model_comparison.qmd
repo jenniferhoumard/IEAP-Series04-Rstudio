@@ -1,20 +1,56 @@
 
 ## Draw conclusions
 
-<!--
-Compare your numerical findings with your initial predictions.
+**Which mathematical model best describes heart rate recovery?**
 
-- Were your hypotheses supported by the data?
-- Which mathematical model best describes heart rate recovery?
-- Does the same model adequately describe both recordings?
-- Are there different recovery phases?
-- What are the limitations of your analysis?
+We compared linear, mono-exponential and bi-exponential models using two recordings: 7.5 min and 3h10 min.
 
-Support your conclusions with graphs, fitted parameters
-and statistical evidence.
+Based on both recordings, we would choose the mono-exponential model to describe the initial decrease in heart rate after exercise because it fits the data well, is relatively simple, and has fewer parameters than the bi-exponential model, making its results easier to interpret.
 
-Final objective:
-Explain what mathematical model you would choose to describe
-heart rate recovery after exercise and justify your choice using
-both scientific literature and experimental evidence.
--->
+- **Linear:** Has 2 parameters and is the simplest model. It fits the initial HR recovery less well than the mono-exponential model as it assumes heart rate decreases at a constant rate.
+- **Mono-exponential:** Has 3 parameters and describes a fast initial decrease in heart rate followed by a slower decrease. This is consistent with the recovery pattern described by @pierpont2013.
+- **Bi-exponential:** Has 5 parameters and allows two different recovery speeds as studied by @joseph2023. However, in the long recording, it fails to converge for Recovery 1 and gives difficult-to-interpret or unrealistic estimates for Recoveries 2 and 3. 
+
+**Results Supporting Model Choice**
+
+We compare the estimated time constants (τ) because they show how quickly heart rate decreases during recovery. We also use MAE and R² to check how well the models fit the data.
+
+| Recording | Statistical evidence | Conclusion |
+|---|---|---|
+| **3h10m — Recovery 1** | Compared with the linear model, mono-exponential reduces MAE from **4.9 to 3.4 bpm** and increases R² from **0.37 to 0.65**. Estimated τ ≈ **91 s**. See @fig-r3h-rec1. | Mono-exponential fits the initial heart rate decrease better than linear. |
+| **3h10m — Recovery 2** |  Heart rate decreases slightly before stabilizing around **99 bpm**. All models perform similarly (R² ≤ 0.06). See @fig-r3h-rec2. | None of the models explains the heart rate variations well. The acceleration data suggest continued movement may influence the recovery pattern. |
+| **3h10m — Recovery 3** | Mono-exponential gives τ ≈ **174 s** over the first 10 minutes. See @fig-r3h-sensitivity. | Initial recovery is slower than in Recovery 1. Over the full recovery period, more complex models fit better. |
+| **7.5-minute recording** | Mono-exponential gives τ ≈ **49 s** for the first 330 seconds and **63 s** for the full recording. See @fig-r7-fits. | Mono-exponential describes the initial decrease well, but the estimates depend on the recovery duration used. |
+| **Scientific literature** | @joseph2023 reported τ ≈ **65 s** after maximal treadmill exercise, with participants recovering lying down. | Our short recording gives similar values (49–63 s), but the long recording gives higher values (91 and 174 s). Differences in exercise intensity, movement and posture may help explain this. |
+
+**Are there different recovery phases?**
+
+The graph suggests two recovery phases: a fast decrease in heart rate followed by a slower decrease (@fig-r3h-rec3-zoom). This is consistent with the recovery patterns discussed by @joseph2023.
+
+However, our results do not clearly confirm two separate exponential recovery phases. Although the bi-exponential model fits the data, it gives unrealistic estimates, including a final heart rate of 31 bpm and a slow recovery time of approximately 4.5 hours.
+
+When we replace the second exponential component with a simple, steady decrease (linear drift), the model fits almost as well (MAE = 6.45 bpm). This shows that we can explain the slower decrease without needing a second exponential process. Therefore, we cannot confirm that two separate exponential recovery phases occurred.
+
+**Were our hypotheses supported?**
+
+The mono-exponential model was the preferred choice for initial heart rate recovery for both recordings, but it does not describe every part equally well. For longer recovery periods, the bi-exponential and mono-exponential with linear drift models can provide better statistical fits. Adding linear drift allows us to describe the continued slow decrease without assuming a second exponential recovery process.
+
+| Hypothesis | Result | Explanation |
+|---|---|---|
+| **H1 — Mono-exponential fits better than linear** | **Supported** | In both recordings, the mono-exponential model generally fits the initial heart rate decrease better. Heart rate drops quickly at first, then more slowly, rather than decreasing at a constant rate. |
+| **H2 — Bi-exponential describes two recovery phases** | **Partly supported** | The long recording shows a fast decrease followed by a slower decrease, but the bi-exponential model gives unrealistic estimates for the slow phase. In the short recording, the 7.5-minute duration is too short to clearly identify a separate slow exponential phase, and the later decrease may be related to reduced movement. Therefore, we cannot confirm two separate exponential recovery phases. |
+| **H3 — Continued movement affects recovery** | **Supported** |  In the long recording, heart rate stabilizes around 99 bpm during Recovery 2 while movement continues. In the 7.5-minute recording, heart rate remains around 130–137 bpm during movement and decreases again when movement stops at approximately 330 s. These results support the hypothesis that continued movement influences heart rate recovery. See @fig-r3h-rec2 and @fig-r7-overview. |
+
+**Limitations**
+
+We do not know exactly what exercise was performed, how intense it was, or when it ended. We used acceleration to estimate activity periods, but movement does not always mean exercise.
+
+Our results also depend on how much of the recovery period we analyze. A short period mainly captures the initial fast decrease, while a longer period may also include slower changes in heart rate.
+
+We also tested different heart rate measurements (RR intervals, pulse data, and 5-second averages). These can give slightly different results because they measure or summarize heart rate differently.
+
+Heart rate measurements taken close together are usually similar, so they do not give us completely new information. This can make our confidence intervals too narrow, meaning we may be less certain about our results than the calculations suggest.
+
+We only studied two recordings, so we cannot assume everyone recovers in the same way.
+
+Overall, the mono-exponential model is our preferred choice for initial heart rate recovery. For longer recovery periods, a mono-exponential model with linear drift may better describe the continued slow decrease in heart rate. However, neither model fully accounts for the effects of continued movement.
