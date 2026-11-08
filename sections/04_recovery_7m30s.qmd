@@ -178,13 +178,38 @@ the literature.
 
 We fit the three required models to the beat-to-beat HR:
 
-- **Linear:** $HR(t) = \beta_0 + \beta_1 t$
-- **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$
-- **Bi-exponential:** $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$
+- **Linear:** $HR(t) = \beta_0 + \beta_1 t$. HR decreases at a **constant
+  rate** ($\beta_1$ bpm per second) and never levels off.
+- **Mono-exponential:** $HR(t) = HR_\infty + a\,e^{-t/\tau}$. HR falls
+  **quickly at first, then more and more slowly**, and tends towards a plateau
+  $HR_\infty$. The time constant $\tau$ is the time needed for the excess HR
+  ($HR - HR_\infty$) to fall to about 37 % of its value.
+- **Bi-exponential:**
+  $HR(t) = HR_\infty + a_1 e^{-t/\tau_1} + a_2 e^{-t/\tau_2}$. HR is the sum of
+  **two decays with different speeds**: a fast one ($\tau_1$) and a slow one
+  ($\tau_2$), which could reflect two physiological processes (vagal
+  reactivation and sympathetic withdrawal, Section 2.1).
 
-Non-linear models are fitted by least squares with `nls()`. The bi-exponential
-is sensitive to starting values, so we try several and keep the best converged
-fit. We use the `port` algorithm with bounds ($a_i \ge 0$, $\tau_i \ge 1$ s).
+The linear model is fitted with `lm()`. The exponential models are non-linear
+in their parameters, so they are fitted by least squares with `nls()`, which
+starts from initial values and improves them step by step.
+
+**Starting values.** We chose them from the overview plot (@fig-r7-overview)
+and from plausible physiological values:
+
+- the plateau $HR_\infty$ is close to the lowest HR values reached
+  (≈ 110–130 bpm);
+- the amplitude $a$ (or $a_1 + a_2$) is roughly the drop from the start of the
+  recording to the plateau (≈ 155 − 130 = 25 bpm);
+- for the fast time constant, HR reaches the plateau after about 90 s, and an
+  exponential is almost finished after 2–3 $\tau$, so $\tau \approx 30$–50 s;
+- for the slow time constant, we tried several values (150, 400 and 1 000 s),
+  because the plot does not show it clearly.
+
+The bi-exponential is sensitive to starting values, so we try these three sets
+and keep the converged fit with the smallest residual sum of squares. We use
+the `port` algorithm, which accepts bounds: amplitudes $\ge 0$ and time
+constants $\ge 1$ s.
 
 ```{r}
 #| label: r7-fit-functions
