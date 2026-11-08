@@ -605,6 +605,32 @@ The time constants of the fast phase (91 s for recovery 1, 174 s for recovery 3)
 
 ### Model comparison and residual analysis
 
+We compare the fitted models to determine which one best describes heart rate
+recovery. We use several indicators, because a model can fit the data well but
+still be too complex or miss important patterns.
+
+**Goodness of fit.** We compute the mean absolute error (MAE, the average
+distance between the model and the measured heart rate), the root mean square
+error (RMSE, which gives more weight to large errors) and $R^2$ (the proportion
+of the heart rate variation explained by the model). Lower MAE and RMSE and
+higher $R^2$ indicate a better fit. The signed mean error is not used: it is
+always close to zero, because least-squares fitting balances positive and
+negative errors.
+
+**Complexity.** The Akaike and Bayesian information criteria (AIC, BIC) take
+into account both the fit and the number of parameters. Lower values are
+better: when two models fit the data similarly well, the simpler one is
+preferred. We report $\Delta AIC$, the difference from the best model of each
+recovery period.
+
+**Residuals.** The residuals are the differences between the measured and the
+predicted heart rate. A good model leaves residuals that are randomly scattered
+around zero. We examine them over time to detect systematic errors (long
+periods during which the model is always above or below the data). We also
+test whether consecutive residuals are independent, using the Durbin–Watson
+statistic (close to 2 for independent residuals), the lag-1 autocorrelation and
+the Ljung–Box test.
+
 ```{r}
 #| label: r3h-compare
 # ---------------------------------------------------------------
@@ -775,14 +801,6 @@ ggplot(r3h_summary, aes(model, MAE, fill = model)) +
         strip.text = element_text(face = "bold"))
 
 ```
-
-We compared the models using goodness-of-fit indicators (MAE, RMSE, $R^2$), the
-Akaike and Bayesian information criteria (AIC, BIC), which penalise the number
-of parameters, and the structure of the residuals over time (@fig-r3h-res1 to
-@fig-r3h-res3-zoom). The signed mean error is zero for every model:
-least-squares fitting balances positive and negative errors, so this value
-cannot be used to compare models. We therefore used the mean absolute error
-(MAE), i.e. the average distance between the model and the real heart rate.
 The BIC gives the same ranking as the AIC for all recovery periods.
 
 **Recovery 1 (13–24 min).** The linear model is clearly rejected
