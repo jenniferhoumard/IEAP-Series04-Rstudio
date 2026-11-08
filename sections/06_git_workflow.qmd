@@ -24,3 +24,9 @@ The master document only contains the YAML header, the setup chunk and one `incl
 : The branch names follow a single pattern, `<section number>_<topic>`, so each branch can be matched to its file and to its question at a glance. Because two people never edit the same file, the branches could be developed in parallel without merge conflicts. The only shared file, `references.bib`, was edited on a single branch (`02_literature_and_hypotheses`).
 
 Since all sections are rendered in the same R session, two sections could overwrite each other's objects (for example two different `models` or `data` objects). To avoid this, each section prefixes its objects and chunk labels: `r7_` / `r7-` for the 7.5-min recording and `r3h_` / `r3h-` for the 3h10m recording.
+
+## Pull requests and peer review
+
+No section was merged directly into `main`. When a section was ready, its owner opened a **pull request** on GitHub and asked the two other members for a review. Reviewers commented on specific lines (clarity of the explanations, missing justifications, rendering problems, consistency with the other sections), and the owner answered each comment with new commits on the same branch before the merge.
+
+For example, the pull request of the 7.5-min recording (#1) received 16 review comments. They were addressed in 10 separate commits, one per comment (e.g. `Explain RR intervals and choice of HR signal`, `Replace hardcoded values with inline R`), so that the history shows how each remark was handled. Pull requests were merged with **"Create a merge commit"** rather than "Squash and merge", so that every individual commit stays visible in `main` (e.g. `Merge pull request #2 from jenniferhoumard/01_random_noise`).
