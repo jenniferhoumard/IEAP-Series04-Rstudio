@@ -1,6 +1,26 @@
 ## Three-hour cardio recording from effort to rest
 
-#### Data import and preparation
+### Data import and preparation
+
+We analyse a 3-hour-and-10-minute recording from an Aidlab chest strap (MIT
+licence) to identify the exercise and recovery periods, and to compare linear,
+mono-exponential and bi-exponential models of heart rate recovery.
+
+We use the RR intervals as our main signal because they provide one heart rate
+value per beat (about 16 700 values), whereas the device pulse signal provides
+one value about every 5 s (2 456 values). This allows us to follow heart rate
+changes in greater detail. Each RR interval is the time between two heartbeats
+in milliseconds; we convert it into heart rate in beats per minute with
+$HR = 60\,000 / RR$. The pulse signal is kept as an independent check.
+
+We also use the acceleration to estimate movement, and the body position to
+examine posture. All timestamps are converted into time since the start of the
+recording, so that the signals can be compared.
+
+To summarise movement, we compute the standard deviation of the acceleration
+magnitude in 60-s windows. Section 04 uses 10-s windows for its much shorter
+7-min-30-s recording; over three hours, longer windows make the overall
+movement patterns easier to see, although they may hide very brief movements.
 
 ```{r}
 #| label: r3h-import
